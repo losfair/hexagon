@@ -22,6 +22,12 @@ impl Object for Null {
     }
 }
 
+impl Null {
+    pub fn new() -> Null {
+        Null {}
+    }
+}
+
 pub struct Int {
     value: i64
 }
@@ -41,6 +47,14 @@ impl Object for Int {
 
     fn as_any_mut(&mut self) -> &mut Any {
         self as &mut Any
+    }
+
+    fn to_i64(&self) -> i64 {
+        self.value
+    }
+
+    fn to_f64(&self) -> f64 {
+        self.value as f64
     }
 }
 
@@ -64,6 +78,14 @@ impl Object for Float {
     fn as_any_mut(&mut self) -> &mut Any {
         self as &mut Any
     }
+
+    fn to_f64(&self) -> f64 {
+        self.value
+    }
+
+    fn to_i64(&self) -> i64 {
+        self.value as i64
+    }
 }
 
 pub struct StringObject {
@@ -85,5 +107,9 @@ impl Object for StringObject {
 
     fn as_any_mut(&mut self) -> &mut Any {
         self as &mut Any
+    }
+
+    fn to_string(&self) -> String {
+        self.value.clone()
     }
 }

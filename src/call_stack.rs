@@ -65,7 +65,29 @@ impl Frame {
     pub fn pop_exec(&self) -> usize {
         match self.exec_stack.borrow_mut().pop() {
             Some(v) => v,
-            None => panic!(errors::RuntimeError::new("Execution stack corrupted"))
+            None => panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")))
         }
+    }
+
+    pub fn reset_locals(&self, n_slots: usize) {
+        *self.locals.borrow_mut() = vec![0; n_slots];
+    }
+
+    pub fn get_local(&self, ind: usize) -> usize {
+        let locals = self.locals.borrow();
+        if ind >= locals.len() {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
+        }
+
+        (*locals)[ind]
+    }
+
+    pub fn set_local(&self, ind: usize, obj_id: usize) {
+        let mut locals = self.locals.borrow_mut();
+        if ind >= locals.len() {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
+        }
+
+        (*locals)[ind] = obj_id;
     }
 }

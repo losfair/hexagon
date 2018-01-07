@@ -19,3 +19,11 @@ impl Object for Function {
         self as &mut Any
     }
 }
+
+impl Function {
+    pub fn from_opcodes(opcodes: Vec<OpCode>) -> Function {
+        Function {
+            opcodes: opcodes
+        }
+    }
+}

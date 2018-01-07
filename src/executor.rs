@@ -8,6 +8,7 @@ use static_root::StaticRoot;
 use program::Program;
 use opcode::OpCode;
 use errors;
+use primitive;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -123,9 +124,9 @@ impl ExecutorImpl {
         self.get_static_root().append_child(obj_id);
     }
 
-    pub fn eval(&mut self, program: Program) {
-        for op in program.opcodes {
-            match op {
+    pub fn eval(&mut self, opcodes: &[OpCode]) {
+        for op in opcodes {
+            match *op {
                 OpCode::Call => {
                     let (target, args) = {
                         let frame = self.get_current_frame();
@@ -135,7 +136,7 @@ impl ExecutorImpl {
 
                         let n_args = self.get_object(n_args_obj).to_i64();
                         if n_args < 0 {
-                            panic!(errors::RuntimeError::new("Invalid number of arguments"));
+                            panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of arguments")));
                         }
 
                         let args: Vec<usize> = (0..(n_args as usize))
@@ -147,7 +148,55 @@ impl ExecutorImpl {
                     let ret = self.invoke(target, args);
                     self.get_current_frame().push_exec(ret);
                 },
-                _ => panic!(errors::RuntimeError::new("Not implemented"))
+                OpCode::Pop => {
+                    self.get_current_frame().pop_exec();
+                },
+                OpCode::InitLocal => {
+                    let frame = self.get_current_frame();
+                    let n_slots_obj = frame.pop_exec();
+                    let n_slots = self.get_object(n_slots_obj).to_i64();
+                    if n_slots < 0 {
+                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of slots")));
+                    }
+
+                    frame.reset_locals(n_slots as usize);
+                },
+                OpCode::GetLocal => {
+                    let frame = self.get_current_frame();
+                    let ind_obj = frame.pop_exec();
+                    let ind = self.get_object(ind_obj).to_i64();
+
+                    if ind < 0 {
+                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid index")));
+                    }
+
+                    let ret = frame.get_local(ind as usize);
+                    frame.push_exec(ret);
+                },
+                OpCode::SetLocal => {
+                    let frame = self.get_current_frame();
+                    let ind_obj = frame.pop_exec();
+                    let ind = self.get_object(ind_obj).to_i64();
+
+                    let obj_id = frame.pop_exec();
+
+                    if ind < 0 {
+                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid index")));
+                    }
+                    frame.set_local(ind as usize, obj_id);
+                },
+                OpCode::GetStatic => {
+                    let key_obj = self.get_current_frame().pop_exec();
+                    let key = key_obj.to_string();
+
+                    let maybe_target_obj = self.static_objects.get(key.as_str()).map(|v| *v);
+                    if let Some(target_obj) = maybe_target_obj {
+                        self.get_current_frame().push_exec(target_obj);
+                    } else {
+                        let null_obj_id = self.allocate_object(Box::new(primitive::Null::new()));
+                        self.get_current_frame().push_exec(null_obj_id);
+                    }
+                }
             }
         }
     }
