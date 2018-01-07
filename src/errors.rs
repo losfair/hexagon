@@ -37,6 +37,10 @@ impl Object for RuntimeError {
     fn as_any_mut(&mut self) -> &mut Any {
         self as &mut Any
     }
+
+    fn to_string(&self) -> String {
+        self.description.clone()
+    }
 }
 
 impl RuntimeError {
@@ -62,6 +66,10 @@ impl Object for FieldNotFoundError {
 
     fn as_any_mut(&mut self) -> &mut Any {
         self as &mut Any
+    }
+
+    fn to_string(&self) -> String {
+        format!("Field not found: {}", self.field_name)
     }
 }
 

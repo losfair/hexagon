@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::cell::{Ref, RefMut, RefCell};
 use std::collections::HashMap;
-use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use object::Object;
 use call_stack::{CallStack, Frame};
 use static_root::StaticRoot;
@@ -15,11 +15,17 @@ pub struct Executor {
 }
 
 impl Executor {
+    pub fn new() -> Executor {
+        Executor {
+            inner: RefCell::new(ExecutorImpl::new())
+        }
+    }
+
     pub fn handle<'a>(&'a self) -> Ref<'a, ExecutorImpl> {
         self.inner.borrow()
     }
 
-    pub fn handle_mut<'a>(&'a mut self) -> RefMut<'a, ExecutorImpl> {
+    pub fn handle_mut<'a>(&'a self) -> RefMut<'a, ExecutorImpl> {
         self.inner.borrow_mut()
     }
 }
@@ -31,6 +37,11 @@ pub struct ExecutorImpl {
     // TODO: Split these out into a new struct
     objects: Vec<Option<Box<Object>>>,
     object_idx_pool: Vec<usize>
+}
+
+enum EvalControlMessage {
+    Return(usize),
+    Redirect(usize)
 }
 
 impl ExecutorImpl {
@@ -117,22 +128,64 @@ impl ExecutorImpl {
             Ok(v) => {
                 self.get_current_frame().push_exec(v);
             },
-            Err(e) => panic!(e)
+            Err(e) => resume_unwind(e)
         }
+    }
+
+    fn set_static_object<K: ToString>(&mut self, key: K, obj_id: usize) {
+        let key = key.to_string();
+
+        // Replacing static objects is denied to ensure
+        // `get_static_object_ref` is safe.
+        if self.static_objects.get(key.as_str()).is_some() {
+            panic!(errors::VMError::from(errors::RuntimeError::new("A static object with the same key already exists")));
+        }
+
+        self.get_static_root().append_child(obj_id);
+        self.static_objects.insert(key, obj_id);
     }
 
     pub fn create_static_object<K: ToString>(&mut self, key: K, obj: Box<Object>) {
         let obj_id = self.allocate_object(obj);
-        self.get_static_root().append_child(obj_id);
+        self.set_static_object(key, obj_id);
     }
 
-    pub fn eval_basic_block(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> usize {
+    pub fn get_static_object<K: AsRef<str>>(&self, key: K) -> Option<usize> {
+        let key = key.as_ref();
+        self.static_objects.get(key).map(|v| *v)
+    }
+
+    pub fn get_static_object_ref<K: AsRef<str>>(&self, key: K) -> Option<&Object> {
+        self.get_static_object(key).map(|id| self.get_object(id))
+    }
+
+    fn eval_basic_blocks_impl(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> EvalControlMessage {
         if basic_block_id >= basic_blocks.len() {
             panic!(errors::VMError::from(errors::RuntimeError::new("Basic block id out of bound")));
         }
 
         for op in &basic_blocks[basic_block_id].opcodes {
             match *op {
+                OpCode::LoadNull => {
+                    let obj = self.allocate_object(Box::new(primitive::Null::new()));
+                    self.get_current_frame().push_exec(obj);
+                },
+                OpCode::LoadInt(value) => {
+                    let obj = self.allocate_object(Box::new(primitive::Int::new(value)));
+                    self.get_current_frame().push_exec(obj);
+                },
+                OpCode::LoadFloat(value) => {
+                    let obj = self.allocate_object(Box::new(primitive::Float::new(value)));
+                    self.get_current_frame().push_exec(obj);
+                },
+                OpCode::LoadBool(value) => {
+                    let obj = self.allocate_object(Box::new(primitive::Bool::new(value)));
+                    self.get_current_frame().push_exec(obj);
+                },
+                OpCode::LoadString(ref value) => {
+                    let obj = self.allocate_object(Box::new(primitive::StringObject::new(value)));
+                    self.get_current_frame().push_exec(obj);
+                },
                 OpCode::Call => {
                     let (target, args) = {
                         let frame = self.get_current_frame();
@@ -202,6 +255,14 @@ impl ExecutorImpl {
                         self.get_current_frame().push_exec(null_obj_id);
                     }
                 },
+                OpCode::SetStatic => {
+                    let key_obj_id = self.get_current_frame().pop_exec();
+                    let key = self.get_object(key_obj_id).to_string();
+
+                    let obj_id = self.get_current_frame().pop_exec();
+
+                    self.set_static_object(key, obj_id);
+                },
                 OpCode::Branch => {
                     let target_id_obj_id = self.get_current_frame().pop_exec();
                     let target_id = self.get_object(target_id_obj_id).to_i64();
@@ -209,7 +270,7 @@ impl ExecutorImpl {
                     if target_id < 0 {
                         panic!(errors::VMError::from(errors::RuntimeError::new("Invalid target id")));
                     }
-                    return self.eval_basic_block(basic_blocks, target_id as usize);
+                    return EvalControlMessage::Redirect(target_id as usize);
                 },
                 OpCode::ConditionalBranch => {
                     let (should_branch, target_id) = {
@@ -227,16 +288,56 @@ impl ExecutorImpl {
                     };
 
                     if should_branch {
-                        return self.eval_basic_block(basic_blocks, target_id as usize);
+                        return EvalControlMessage::Redirect(target_id as usize);
                     }
                 },
                 OpCode::Return => {
                     let ret_val = self.get_current_frame().pop_exec();
-                    return ret_val;
+                    return EvalControlMessage::Return(ret_val);
                 }
             }
         }
 
         panic!(errors::VMError::from(errors::RuntimeError::new("Leaving a basic block without terminator")));
+    }
+
+    pub(crate) fn eval_basic_blocks(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> usize {
+        let mut current_id = basic_block_id;
+
+        loop {
+            let msg = self.eval_basic_blocks_impl(basic_blocks, current_id);
+            match msg {
+                EvalControlMessage::Redirect(target) => {
+                    current_id = target;
+                },
+                EvalControlMessage::Return(value) => {
+                    return value;
+                }
+            }
+        }
+    }
+
+    pub fn run_callable<K: AsRef<str>>(&mut self, key: K) -> Result<(), errors::VMError> {
+        let callable_obj_id = self.get_static_object(key).unwrap_or_else(|| {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Static object not found")));
+        });
+
+        let frame = Frame::with_arguments(vec! []);
+        let frame_obj = self.allocate_object(Box::new(frame));
+
+        self.stack.push(frame_obj);
+        let ret = catch_unwind(AssertUnwindSafe(|| self.invoke(callable_obj_id, vec! [])));
+        self.stack.pop();
+
+        match ret {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if let Ok(e) = e.downcast::<errors::VMError>() {
+                    Err(*e)
+                } else {
+                    panic!("Unknown error from VM");
+                }
+            }
+        }
     }
 }

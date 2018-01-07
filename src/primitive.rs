@@ -20,11 +20,65 @@ impl Object for Null {
     fn as_any_mut(&mut self) -> &mut Any {
         self as &mut Any
     }
+
+    fn to_bool(&self) -> bool {
+        false
+    }
 }
 
 impl Null {
     pub fn new() -> Null {
         Null {}
+    }
+}
+
+pub struct Bool {
+    value: bool
+}
+
+impl Object for Bool {
+    fn get_children(&self) -> Vec<usize> {
+        Vec::new()
+    }
+
+    fn typename(&self) -> &str {
+        "bool"
+    }
+
+    fn as_any(&self) -> &Any {
+        self as &Any
+    }
+
+    fn as_any_mut(&mut self) -> &mut Any {
+        self as &mut Any
+    }
+
+    fn to_i64(&self) -> i64 {
+        if self.value {
+            1
+        } else {
+            0
+        }
+    }
+
+    fn to_f64(&self) -> f64 {
+        if self.value {
+            1.0
+        } else {
+            0.0
+        }
+    }
+
+    fn to_bool(&self) -> bool {
+        self.value
+    }
+}
+
+impl Bool {
+    pub fn new(value: bool) -> Bool {
+        Bool {
+            value: value
+        }
     }
 }
 
@@ -56,6 +110,18 @@ impl Object for Int {
     fn to_f64(&self) -> f64 {
         self.value as f64
     }
+
+    fn to_bool(&self) -> bool {
+        self.value == 0
+    }
+}
+
+impl Int {
+    pub fn new(value: i64) -> Int {
+        Int {
+            value: value
+        }
+    }
 }
 
 pub struct Float {
@@ -86,6 +152,18 @@ impl Object for Float {
     fn to_i64(&self) -> i64 {
         self.value as i64
     }
+
+    fn to_bool(&self) -> bool {
+        self.value == 0.0
+    }
+}
+
+impl Float {
+    pub fn new(value: f64) -> Float {
+        Float {
+            value: value
+        }
+    }
 }
 
 pub struct StringObject {
@@ -111,5 +189,17 @@ impl Object for StringObject {
 
     fn to_string(&self) -> String {
         self.value.clone()
+    }
+
+    fn to_bool(&self) -> bool {
+        self.value == ""
+    }
+}
+
+impl StringObject {
+    pub fn new<T: ToString>(value: T) -> StringObject {
+        StringObject {
+            value: value.to_string()
+        }
     }
 }

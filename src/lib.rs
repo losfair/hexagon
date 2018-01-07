@@ -7,3 +7,6 @@ pub mod object;
 pub mod opcode;
 pub mod primitive;
 pub mod static_root;
+
+#[cfg(test)]
+pub mod executor_test;
