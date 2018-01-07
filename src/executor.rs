@@ -5,7 +5,6 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use object::Object;
 use call_stack::{CallStack, Frame};
 use static_root::StaticRoot;
-use program::Program;
 use opcode::OpCode;
 use errors;
 use primitive;

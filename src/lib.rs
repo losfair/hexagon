@@ -5,5 +5,4 @@ pub mod function;
 pub mod object;
 pub mod opcode;
 pub mod primitive;
-pub mod program;
 pub mod static_root;
