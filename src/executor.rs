@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::cell::{Ref, RefMut, RefCell};
 use std::collections::HashMap;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
@@ -56,7 +55,7 @@ impl ExecutorImpl {
         }
     }
 
-    fn allocate_object(&mut self, inner: Box<Object>) -> usize {
+    pub fn allocate_object(&mut self, inner: Box<Object>) -> usize {
         let pool = &mut self.object_idx_pool;
         let id = if let Some(id) = pool.pop() {
             id
@@ -70,8 +69,8 @@ impl ExecutorImpl {
     }
 
     unsafe fn deallocate_object(&mut self, id: usize) {
-        let mut objects = &mut self.objects;
-        let mut pool = &mut self.object_idx_pool;
+        let objects = &mut self.objects;
+        let pool = &mut self.object_idx_pool;
 
         objects[id] = None;
         pool.push(id);
@@ -89,12 +88,8 @@ impl ExecutorImpl {
         self.get_typed_object(0).unwrap()
     }
 
-    fn get_current_frame(&self) -> &Frame {
+    pub fn get_current_frame(&self) -> &Frame {
         self.get_typed_object::<Frame>(self.stack.top()).unwrap()
-    }
-
-    fn pop_object_from_exec_stack(&self) -> &Object {
-        self.get_object(self.get_current_frame().pop_exec())
     }
 
     fn invoke(&mut self, callable_obj_id: usize, args: Vec<usize>) {

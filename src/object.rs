@@ -4,10 +4,10 @@ use executor::{ExecutorImpl};
 
 pub trait Object {
     fn finalize(&self) {}
-    fn call(&self, executor: &mut ExecutorImpl) -> usize {
+    fn call(&self, _executor: &mut ExecutorImpl) -> usize {
         panic!(errors::VMError::from(errors::RuntimeError::new("Not callable")));
     }
-    fn get_field(&self, name: &str) -> Option<usize> {
+    fn get_field(&self, _name: &str) -> Option<usize> {
         None
     }
     fn must_get_field(&self, name: &str) -> usize {
