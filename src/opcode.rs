@@ -5,5 +5,8 @@ pub enum OpCode {
     GetLocal,
     SetLocal,
     GetStatic,
-    Call
+    Call,
+    Branch,
+    ConditionalBranch,
+    Return
 }

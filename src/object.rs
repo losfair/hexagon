@@ -28,6 +28,9 @@ pub trait Object {
     fn to_string(&self) -> String {
         panic!(errors::VMError::from(errors::RuntimeError::new("Cannot cast to string")));
     }
+    fn to_bool(&self) -> bool {
+        panic!(errors::VMError::from(errors::RuntimeError::new("Cannot cast to bool")));
+    }
     fn get_children(&self) -> Vec<usize>;
     fn as_any(&self) -> &Any;
     fn as_any_mut(&mut self) -> &mut Any;

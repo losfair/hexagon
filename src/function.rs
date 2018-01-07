@@ -1,9 +1,10 @@
 use std::any::Any;
 use object::Object;
 use opcode::OpCode;
+use basic_block::BasicBlock;
 
 pub struct Function {
-    opcodes: Vec<OpCode>
+    basic_blocks: Vec<BasicBlock>
 }
 
 impl Object for Function {
@@ -21,9 +22,9 @@ impl Object for Function {
 }
 
 impl Function {
-    pub fn from_opcodes(opcodes: Vec<OpCode>) -> Function {
+    pub fn from_basic_blocks(blocks: Vec<BasicBlock>) -> Function {
         Function {
-            opcodes: opcodes
+            basic_blocks: blocks
         }
     }
 }

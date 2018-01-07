@@ -8,6 +8,7 @@ use static_root::StaticRoot;
 use opcode::OpCode;
 use errors;
 use primitive;
+use basic_block::BasicBlock;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -85,7 +86,7 @@ impl ExecutorImpl {
         self.get_object(self.get_current_frame().pop_exec())
     }
 
-    fn invoke(&mut self, callable_obj_id: usize, args: Vec<usize>) -> usize {
+    fn invoke(&mut self, callable_obj_id: usize, args: Vec<usize>) {
         let frame = Frame::with_arguments(args);
         let frame_obj = self.allocate_object(Box::new(frame));
 
@@ -113,7 +114,9 @@ impl ExecutorImpl {
         self.get_current_frame().pop_exec();
 
         match ret {
-            Ok(v) => v,
+            Ok(v) => {
+                self.get_current_frame().push_exec(v);
+            },
             Err(e) => panic!(e)
         }
     }
@@ -123,8 +126,12 @@ impl ExecutorImpl {
         self.get_static_root().append_child(obj_id);
     }
 
-    pub fn eval(&mut self, opcodes: &[OpCode]) {
-        for op in opcodes {
+    pub fn eval_basic_block(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> usize {
+        if basic_block_id >= basic_blocks.len() {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Basic block id out of bound")));
+        }
+
+        for op in &basic_blocks[basic_block_id].opcodes {
             match *op {
                 OpCode::Call => {
                     let (target, args) = {
@@ -144,8 +151,7 @@ impl ExecutorImpl {
 
                         (target, args)
                     };
-                    let ret = self.invoke(target, args);
-                    self.get_current_frame().push_exec(ret);
+                    self.invoke(target, args);
                 },
                 OpCode::Pop => {
                     self.get_current_frame().pop_exec();
@@ -185,8 +191,8 @@ impl ExecutorImpl {
                     frame.set_local(ind as usize, obj_id);
                 },
                 OpCode::GetStatic => {
-                    let key_obj = self.get_current_frame().pop_exec();
-                    let key = key_obj.to_string();
+                    let key_obj_id = self.get_current_frame().pop_exec();
+                    let key = self.get_object(key_obj_id).to_string();
 
                     let maybe_target_obj = self.static_objects.get(key.as_str()).map(|v| *v);
                     if let Some(target_obj) = maybe_target_obj {
@@ -195,8 +201,42 @@ impl ExecutorImpl {
                         let null_obj_id = self.allocate_object(Box::new(primitive::Null::new()));
                         self.get_current_frame().push_exec(null_obj_id);
                     }
+                },
+                OpCode::Branch => {
+                    let target_id_obj_id = self.get_current_frame().pop_exec();
+                    let target_id = self.get_object(target_id_obj_id).to_i64();
+
+                    if target_id < 0 {
+                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid target id")));
+                    }
+                    return self.eval_basic_block(basic_blocks, target_id as usize);
+                },
+                OpCode::ConditionalBranch => {
+                    let (should_branch, target_id) = {
+                        let frame = self.get_current_frame();
+                        let condition_obj_id = frame.pop_exec();
+                        let condition_obj = self.get_object(condition_obj_id);
+                        let target_id_obj_id = frame.pop_exec();
+                        let target_id = self.get_object(target_id_obj_id).to_i64();
+
+                        if target_id < 0 {
+                            panic!(errors::VMError::from(errors::RuntimeError::new("Invalid target id")));
+                        }
+
+                        (condition_obj.to_bool(), target_id)
+                    };
+
+                    if should_branch {
+                        return self.eval_basic_block(basic_blocks, target_id as usize);
+                    }
+                },
+                OpCode::Return => {
+                    let ret_val = self.get_current_frame().pop_exec();
+                    return ret_val;
                 }
             }
         }
+
+        panic!(errors::VMError::from(errors::RuntimeError::new("Leaving a basic block without terminator")));
     }
 }
