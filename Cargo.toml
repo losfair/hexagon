@@ -2,5 +2,8 @@
 name = "hexagon-vm-core"
 version = "0.1.0"
 authors = ["losfair <zhy20000919@hotmail.com>"]
+description = "The Hexagon VM"
+license = "LGPL-3.0"
+repository = "https://github.com/losfair/hexagon-vm-core"
 
 [dependencies]
