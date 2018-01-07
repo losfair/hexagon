@@ -8,6 +8,7 @@ use opcode::OpCode;
 use errors;
 use primitive;
 use basic_block::BasicBlock;
+use object_info::{ObjectInfo, ObjectHandle, TypedObjectHandle};
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -34,7 +35,7 @@ pub struct ExecutorImpl {
     static_objects: HashMap<String, usize>,
 
     // TODO: Split these out into a new struct
-    objects: Vec<Option<Box<Object>>>,
+    objects: Vec<Option<ObjectInfo>>,
     object_idx_pool: Vec<usize>
 }
 
@@ -49,7 +50,7 @@ impl ExecutorImpl {
             stack: CallStack::new(),
             static_objects: HashMap::new(),
             objects: vec![
-                Some(Box::new(StaticRoot::new()))
+                Some(ObjectInfo::new(Box::new(StaticRoot::new())))
             ],
             object_idx_pool: vec![]
         }
@@ -64,7 +65,7 @@ impl ExecutorImpl {
             objects.push(None);
             objects.len() - 1
         };
-        self.objects[id] = Some(inner);
+        self.objects[id] = Some(ObjectInfo::new(inner));
         id
     }
 
@@ -76,19 +77,19 @@ impl ExecutorImpl {
         pool.push(id);
     }
 
-    fn get_object(&self, id: usize) -> &Object {
-        &**self.objects[id].as_ref().unwrap()
+    fn get_object<'a>(&self, id: usize) -> ObjectHandle<'a> {
+        self.objects[id].as_ref().unwrap().handle()
     }
 
-    fn get_typed_object<T: 'static>(&self, id: usize) -> Option<&T> {
-        self.objects[id].as_ref().unwrap().as_any().downcast_ref::<T>()
+    fn get_typed_object<'a, T: 'static>(&self, id: usize) -> Option<TypedObjectHandle<'a, T>> {
+        TypedObjectHandle::downcast_from(self.get_object(id))
     }
 
-    fn get_static_root(&self) -> &StaticRoot {
+    fn get_static_root<'a>(&self) -> TypedObjectHandle<'a, StaticRoot> {
         self.get_typed_object(0).unwrap()
     }
 
-    pub fn get_current_frame(&self) -> &Frame {
+    pub fn get_current_frame<'a>(&self) -> TypedObjectHandle<'a, Frame> {
         self.get_typed_object::<Frame>(self.stack.top()).unwrap()
     }
 
@@ -104,14 +105,7 @@ impl ExecutorImpl {
 
         self.get_current_frame().push_exec(callable_obj_id);
 
-        // [TEST REQUIRED]
-        // the object stays alive as long as it is reachable.
-        // so this should be safe.
-        let callable_obj = unsafe {
-            ::std::mem::transmute::<&Object, &'static Object>(
-                self.get_object(callable_obj_id)
-            )
-        };
+        let callable_obj = self.get_object(callable_obj_id);
 
         self.stack.push(frame_obj);
         let ret = catch_unwind(AssertUnwindSafe(|| callable_obj.call(self)));
@@ -150,7 +144,7 @@ impl ExecutorImpl {
         self.static_objects.get(key).map(|v| *v)
     }
 
-    pub fn get_static_object_ref<K: AsRef<str>>(&self, key: K) -> Option<&Object> {
+    pub fn get_static_object_ref<'a, K: AsRef<str>>(&self, key: K) -> Option<ObjectHandle<'a>> {
         self.get_static_object(key).map(|id| self.get_object(id))
     }
 
@@ -332,6 +326,16 @@ impl ExecutorImpl {
                 } else {
                     panic!("Unknown error from VM");
                 }
+            }
+        }
+    }
+}
+
+impl Drop for ExecutorImpl {
+    fn drop(&mut self) {
+        for obj in &mut self.objects {
+            if let Some(ref mut obj) = *obj {
+                obj.gc_notify();
             }
         }
     }
