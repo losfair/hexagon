@@ -2,6 +2,7 @@ use object::Object;
 use object_info::{ObjectInfo, ObjectHandle, TypedObjectHandle};
 use static_root::StaticRoot;
 use call_stack::CallStack;
+use errors;
 
 pub struct ObjectPool {
     objects: Vec<Option<ObjectInfo>>,
@@ -19,8 +20,7 @@ impl ObjectPool {
     }
 
     pub fn allocate(&mut self, inner: Box<Object>) -> usize {
-        let pool = &mut self.object_idx_pool;
-        let id = if let Some(id) = pool.pop() {
+        let id = if let Some(id) = self.object_idx_pool.pop() {
             id
         } else {
             let objects = &mut self.objects;
@@ -28,6 +28,10 @@ impl ObjectPool {
             objects.len() - 1
         };
         self.objects[id] = Some(ObjectInfo::new(inner));
+
+        let handle = self.objects[id].as_ref().unwrap().handle();
+        handle.initialize(self);
+
         id
     }
 
@@ -47,6 +51,12 @@ impl ObjectPool {
 
     pub fn get_typed<'a, T: 'static>(&self, id: usize) -> Option<TypedObjectHandle<'a, T>> {
         TypedObjectHandle::downcast_from(self.get(id))
+    }
+
+    pub fn must_get_typed<'a, T: 'static>(&self, id: usize) -> TypedObjectHandle<'a, T> {
+        self.get_typed(id).unwrap_or_else(|| {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Type mismatch")))
+        })
     }
 
     pub fn get_static_root<'a>(&self) -> TypedObjectHandle<'a, StaticRoot> {

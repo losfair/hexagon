@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::cmp::Ordering;
 use object::Object;
 
 pub struct Null {
@@ -23,6 +24,18 @@ impl Object for Null {
 
     fn to_bool(&self) -> bool {
         false
+    }
+
+    fn test_eq(&self, other: &Object) -> bool {
+        other.as_any().is::<Self>()
+    }
+
+    fn compare(&self, other: &Object) -> Option<Ordering> {
+        if self.test_eq(other) {
+            Some(Ordering::Equal)
+        } else {
+            None
+        }
     }
 }
 
@@ -72,6 +85,22 @@ impl Object for Bool {
     fn to_bool(&self) -> bool {
         self.value
     }
+
+    fn test_eq(&self, other: &Object) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            other.value == self.value
+        } else {
+            false
+        }
+    }
+
+    fn compare(&self, other: &Object) -> Option<Ordering> {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            self.value.partial_cmp(&other.value)
+        } else {
+            None
+        }
+    }
 }
 
 impl Bool {
@@ -83,7 +112,7 @@ impl Bool {
 }
 
 pub struct Int {
-    value: i64
+    pub(crate) value: i64
 }
 
 impl Object for Int {
@@ -114,6 +143,22 @@ impl Object for Int {
     fn to_bool(&self) -> bool {
         self.value == 0
     }
+
+    fn test_eq(&self, other: &Object) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            other.value == self.value
+        } else {
+            false
+        }
+    }
+
+    fn compare(&self, other: &Object) -> Option<Ordering> {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            self.value.partial_cmp(&other.value)
+        } else {
+            None
+        }
+    }
 }
 
 impl Int {
@@ -125,7 +170,7 @@ impl Int {
 }
 
 pub struct Float {
-    value: f64
+    pub(crate) value: f64
 }
 
 impl Object for Float {
@@ -155,6 +200,22 @@ impl Object for Float {
 
     fn to_bool(&self) -> bool {
         self.value == 0.0
+    }
+
+    fn test_eq(&self, other: &Object) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            other.value == self.value
+        } else {
+            false
+        }
+    }
+
+    fn compare(&self, other: &Object) -> Option<Ordering> {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            self.value.partial_cmp(&other.value)
+        } else {
+            None
+        }
     }
 }
 
@@ -187,12 +248,28 @@ impl Object for StringObject {
         self as &mut Any
     }
 
-    fn to_string(&self) -> String {
-        self.value.clone()
+    fn to_str(&self) -> &str {
+        self.value.as_str()
     }
 
     fn to_bool(&self) -> bool {
         self.value == ""
+    }
+
+    fn test_eq(&self, other: &Object) -> bool {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            other.value == self.value
+        } else {
+            false
+        }
+    }
+
+    fn compare(&self, other: &Object) -> Option<Ordering> {
+        if let Some(other) = other.as_any().downcast_ref::<Self>() {
+            self.value.partial_cmp(&other.value)
+        } else {
+            None
+        }
     }
 }
 

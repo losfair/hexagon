@@ -8,6 +8,7 @@ pub struct CallStack {
 }
 
 pub struct Frame {
+    pub(crate) this: usize,
     pub(crate) arguments: RefCell<SmallVec<[usize; 4]>>,
     pub(crate) locals: RefCell<SmallVec<[usize; 16]>>,
     pub(crate) exec_stack: RefCell<SmallVec<[usize; 16]>>
@@ -35,6 +36,7 @@ impl CallStack {
     pub fn collect_objects(&self) -> Vec<usize> {
         let mut objs = HashSet::new();
         for frame in &self.frames {
+            objs.insert(frame.this);
             for v in frame.arguments.borrow().iter() {
                 objs.insert(*v);
             }
@@ -50,8 +52,9 @@ impl CallStack {
 }
 
 impl Frame {
-    pub fn with_arguments(args: &[usize]) -> Frame {
+    pub fn with_arguments(this: usize, args: &[usize]) -> Frame {
         Frame {
+            this: this,
             arguments: RefCell::new(args.into()),
             locals: RefCell::new(SmallVec::new()),
             exec_stack: RefCell::new(SmallVec::new())
@@ -104,7 +107,15 @@ impl Frame {
         }
     }
 
+    pub fn must_get_argument(&self, id: usize) -> usize {
+        self.get_argument(id).unwrap_or_else(|| panic!("Argument index out of bound"))
+    }
+
     pub fn get_n_arguments(&self) -> usize {
         self.arguments.borrow().len()
+    }
+
+    pub fn get_this(&self) -> usize {
+        self.this
     }
 }
