@@ -124,6 +124,11 @@ impl ExecutorImpl {
             panic!(errors::VMError::from(errors::RuntimeError::new("Basic block id out of bound")));
         }
 
+        if self.object_pool.get_alloc_count() >= 1000 {
+            self.object_pool.reset_alloc_count();
+            self.object_pool.collect(&self.stack);
+        }
+
         for op in &basic_blocks[basic_block_id].opcodes {
             match *op {
                 OpCode::LoadNull => {

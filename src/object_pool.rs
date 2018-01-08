@@ -6,7 +6,8 @@ use errors;
 
 pub struct ObjectPool {
     objects: Vec<Option<ObjectInfo>>,
-    object_idx_pool: Vec<usize>
+    object_idx_pool: Vec<usize>,
+    alloc_count: usize
 }
 
 impl ObjectPool {
@@ -15,7 +16,8 @@ impl ObjectPool {
             objects: vec![
                 Some(ObjectInfo::new(Box::new(StaticRoot::new())))
             ],
-            object_idx_pool: vec![]
+            object_idx_pool: vec![],
+            alloc_count: 0
         }
     }
 
@@ -31,6 +33,8 @@ impl ObjectPool {
 
         let handle = self.objects[id].as_ref().unwrap().handle();
         handle.initialize(self);
+
+        self.alloc_count += 1;
 
         id
     }
@@ -61,6 +65,14 @@ impl ObjectPool {
 
     pub fn get_static_root<'a>(&self) -> TypedObjectHandle<'a, StaticRoot> {
         self.get_typed(0).unwrap()
+    }
+
+    pub fn get_alloc_count(&self) -> usize {
+        self.alloc_count
+    }
+
+    pub fn reset_alloc_count(&mut self) {
+        self.alloc_count = 0;
     }
 
     pub fn collect(&mut self, stack: &CallStack) {
