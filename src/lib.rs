@@ -1,3 +1,5 @@
+extern crate smallvec;
+
 pub mod basic_block;
 pub mod call_stack;
 pub mod errors;

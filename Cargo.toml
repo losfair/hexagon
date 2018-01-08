@@ -7,3 +7,4 @@ license = "LGPL-3.0"
 repository = "https://github.com/losfair/hexagon-vm-core"
 
 [dependencies]
+smallvec = "0.6"

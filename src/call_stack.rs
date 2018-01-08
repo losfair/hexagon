@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::cell::RefCell;
+use smallvec::SmallVec;
 use object::Object;
 use errors;
 
@@ -8,9 +9,9 @@ pub struct CallStack {
 }
 
 pub struct Frame {
-    pub(crate) arguments: RefCell<Vec<usize>>,
-    pub(crate) locals: RefCell<Vec<usize>>,
-    pub(crate) exec_stack: RefCell<Vec<usize>>
+    pub(crate) arguments: RefCell<SmallVec<[usize; 4]>>,
+    pub(crate) locals: RefCell<SmallVec<[usize; 16]>>,
+    pub(crate) exec_stack: RefCell<SmallVec<[usize; 16]>>
 }
 
 impl CallStack {
@@ -36,9 +37,9 @@ impl CallStack {
 impl Frame {
     pub fn with_arguments(args: Vec<usize>) -> Frame {
         Frame {
-            arguments: RefCell::new(args),
-            locals: RefCell::new(Vec::new()),
-            exec_stack: RefCell::new(Vec::new())
+            arguments: RefCell::new(args.into()),
+            locals: RefCell::new(SmallVec::new()),
+            exec_stack: RefCell::new(SmallVec::new())
         }
     }
     pub fn push_exec(&self, id: usize) {
@@ -53,7 +54,11 @@ impl Frame {
     }
 
     pub fn reset_locals(&self, n_slots: usize) {
-        *self.locals.borrow_mut() = vec![0; n_slots];
+        let mut locals = self.locals.borrow_mut();
+        locals.clear();
+        for _ in 0..n_slots {
+            locals.push(0);
+        }
     }
 
     pub fn get_local(&self, ind: usize) -> usize {
