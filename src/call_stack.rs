@@ -4,30 +4,13 @@ use object::Object;
 use errors;
 
 pub struct CallStack {
-    frames: Vec<usize>
+    frames: Vec<Frame>
 }
 
 pub struct Frame {
     pub(crate) arguments: RefCell<Vec<usize>>,
     pub(crate) locals: RefCell<Vec<usize>>,
     pub(crate) exec_stack: RefCell<Vec<usize>>
-}
-
-impl Object for Frame {
-    fn get_children(&self) -> Vec<usize> {
-        let mut children = self.arguments.borrow().clone();
-        children.extend(self.locals.borrow().clone());
-        children.extend(self.exec_stack.borrow().clone());
-        children
-    }
-
-    fn as_any(&self) -> &Any {
-        self as &Any
-    }
-
-    fn as_any_mut(&mut self) -> &mut Any {
-        self as &mut Any
-    }
 }
 
 impl CallStack {
@@ -37,16 +20,16 @@ impl CallStack {
         }
     }
 
-    pub fn push(&mut self, frame: usize) {
+    pub fn push(&mut self, frame: Frame) {
         self.frames.push(frame);
     }
 
-    pub fn pop(&mut self) -> usize {
+    pub fn pop(&mut self) -> Frame {
         self.frames.pop().unwrap()
     }
 
-    pub fn top(&self) -> usize {
-        self.frames[self.frames.len() - 1]
+    pub fn top(&self) -> &Frame {
+        &self.frames[self.frames.len() - 1]
     }
 }
 

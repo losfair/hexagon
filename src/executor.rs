@@ -89,13 +89,12 @@ impl ExecutorImpl {
         self.get_typed_object(0).unwrap()
     }
 
-    pub fn get_current_frame<'a>(&self) -> TypedObjectHandle<'a, Frame> {
-        self.get_typed_object::<Frame>(self.stack.top()).unwrap()
+    pub fn get_current_frame<'a>(&self) -> &Frame {
+        self.stack.top()
     }
 
     fn invoke(&mut self, callable_obj_id: usize, args: Vec<usize>) {
         let frame = Frame::with_arguments(args);
-        let frame_obj = self.allocate_object(Box::new(frame));
 
         // Push the callable object onto the execution stack
         // to prevent it from begin GC-ed.
@@ -107,7 +106,7 @@ impl ExecutorImpl {
 
         let callable_obj = self.get_object(callable_obj_id);
 
-        self.stack.push(frame_obj);
+        self.stack.push(frame);
         let ret = catch_unwind(AssertUnwindSafe(|| callable_obj.call(self)));
         self.stack.pop();
 
@@ -312,9 +311,8 @@ impl ExecutorImpl {
         });
 
         let frame = Frame::with_arguments(vec! []);
-        let frame_obj = self.allocate_object(Box::new(frame));
 
-        self.stack.push(frame_obj);
+        self.stack.push(frame);
         let ret = catch_unwind(AssertUnwindSafe(|| self.invoke(callable_obj_id, vec! [])));
         self.stack.pop();
 
