@@ -46,6 +46,14 @@ impl ObjectInfo {
         &*self.object
     }
 
+    pub fn has_native_refs(&self) -> bool {
+        if *self.native_ref_info.n_refs.borrow() == 0 {
+            false
+        } else {
+            true
+        }
+    }
+
     pub fn handle<'a>(&self) -> ObjectHandle<'a> {
         ObjectHandle {
             object: unsafe {

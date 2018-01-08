@@ -80,8 +80,10 @@ impl ObjectPool {
 
         for i in 0..visited.len() {
             if self.objects[i].is_some() && !visited[i] {
-                self.objects[i].as_mut().unwrap().gc_notify();
-                self.deallocate(i);
+                if !self.objects[i].as_ref().unwrap().has_native_refs() {
+                    self.objects[i].as_mut().unwrap().gc_notify();
+                    self.deallocate(i);
+                }
             }
         }
     }
