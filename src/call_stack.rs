@@ -50,13 +50,14 @@ impl CallStack {
 }
 
 impl Frame {
-    pub fn with_arguments(args: Vec<usize>) -> Frame {
+    pub fn with_arguments(args: &[usize]) -> Frame {
         Frame {
             arguments: RefCell::new(args.into()),
             locals: RefCell::new(SmallVec::new()),
             exec_stack: RefCell::new(SmallVec::new())
         }
     }
+
     pub fn push_exec(&self, id: usize) {
         self.exec_stack.borrow_mut().push(id);
     }
@@ -92,5 +93,18 @@ impl Frame {
         }
 
         (*locals)[ind] = obj_id;
+    }
+
+    pub fn get_argument(&self, id: usize) -> Option<usize> {
+        let args = self.arguments.borrow();
+        if id < args.len() {
+            Some(args[id])
+        } else {
+            None
+        }
+    }
+
+    pub fn get_n_arguments(&self) -> usize {
+        self.arguments.borrow().len()
     }
 }

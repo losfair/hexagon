@@ -9,6 +9,7 @@ use primitive;
 use basic_block::BasicBlock;
 use object_info::{ObjectHandle};
 use object_pool::ObjectPool;
+use smallvec::SmallVec;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -55,7 +56,11 @@ impl ExecutorImpl {
         self.stack.top()
     }
 
-    fn invoke(&mut self, callable_obj_id: usize, args: Vec<usize>) {
+    pub fn get_object_pool(&self) -> &ObjectPool {
+        &self.object_pool
+    }
+
+    fn invoke(&mut self, callable_obj_id: usize, args: &[usize]) {
         let frame = Frame::with_arguments(args);
 
         // Push the callable object onto the execution stack
@@ -148,13 +153,13 @@ impl ExecutorImpl {
                             panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of arguments")));
                         }
 
-                        let args: Vec<usize> = (0..(n_args as usize))
+                        let args: SmallVec<[usize; 4]> = (0..(n_args as usize))
                             .map(|_| frame.pop_exec())
                             .collect();
 
                         (target, args)
                     };
-                    self.invoke(target, args);
+                    self.invoke(target, args.as_slice());
                 },
                 OpCode::Pop => {
                     self.get_current_frame().pop_exec();
@@ -276,10 +281,10 @@ impl ExecutorImpl {
             panic!(errors::VMError::from(errors::RuntimeError::new("Static object not found")));
         });
 
-        let frame = Frame::with_arguments(vec! []);
+        let frame = Frame::with_arguments(&[]);
 
         self.stack.push(frame);
-        let ret = catch_unwind(AssertUnwindSafe(|| self.invoke(callable_obj_id, vec! [])));
+        let ret = catch_unwind(AssertUnwindSafe(|| self.invoke(callable_obj_id, &[])));
         self.stack.pop();
 
         match ret {
