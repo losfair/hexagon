@@ -54,7 +54,10 @@ impl ObjectInfo {
 
 impl Drop for ObjectInfo {
     fn drop(&mut self) {
-        assert_eq!(*self.native_ref_info.n_refs.borrow(), 0);
+        if *self.native_ref_info.n_refs.borrow() != 0 {
+            eprintln!("Attempting to drop object with alive references");
+            ::std::process::abort();
+        }
     }
 }
 
