@@ -9,6 +9,7 @@ use errors;
 use primitive;
 use basic_block::BasicBlock;
 use object_info::{ObjectInfo, ObjectHandle, TypedObjectHandle};
+use object_pool::ObjectPool;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -34,9 +35,7 @@ pub struct ExecutorImpl {
     stack: CallStack,
     static_objects: HashMap<String, usize>,
 
-    // TODO: Split these out into a new struct
-    objects: Vec<Option<ObjectInfo>>,
-    object_idx_pool: Vec<usize>
+    object_pool: ObjectPool
 }
 
 enum EvalControlMessage {
@@ -49,44 +48,8 @@ impl ExecutorImpl {
         ExecutorImpl {
             stack: CallStack::new(),
             static_objects: HashMap::new(),
-            objects: vec![
-                Some(ObjectInfo::new(Box::new(StaticRoot::new())))
-            ],
-            object_idx_pool: vec![]
+            object_pool: ObjectPool::new()
         }
-    }
-
-    pub fn allocate_object(&mut self, inner: Box<Object>) -> usize {
-        let pool = &mut self.object_idx_pool;
-        let id = if let Some(id) = pool.pop() {
-            id
-        } else {
-            let objects = &mut self.objects;
-            objects.push(None);
-            objects.len() - 1
-        };
-        self.objects[id] = Some(ObjectInfo::new(inner));
-        id
-    }
-
-    unsafe fn deallocate_object(&mut self, id: usize) {
-        let objects = &mut self.objects;
-        let pool = &mut self.object_idx_pool;
-
-        objects[id] = None;
-        pool.push(id);
-    }
-
-    fn get_object<'a>(&self, id: usize) -> ObjectHandle<'a> {
-        self.objects[id].as_ref().unwrap().handle()
-    }
-
-    fn get_typed_object<'a, T: 'static>(&self, id: usize) -> Option<TypedObjectHandle<'a, T>> {
-        TypedObjectHandle::downcast_from(self.get_object(id))
-    }
-
-    fn get_static_root<'a>(&self) -> TypedObjectHandle<'a, StaticRoot> {
-        self.get_typed_object(0).unwrap()
     }
 
     pub fn get_current_frame<'a>(&self) -> &Frame {
@@ -104,7 +67,7 @@ impl ExecutorImpl {
 
         self.get_current_frame().push_exec(callable_obj_id);
 
-        let callable_obj = self.get_object(callable_obj_id);
+        let callable_obj = self.object_pool.get(callable_obj_id);
 
         self.stack.push(frame);
         let ret = catch_unwind(AssertUnwindSafe(|| callable_obj.call(self)));
@@ -129,12 +92,12 @@ impl ExecutorImpl {
             panic!(errors::VMError::from(errors::RuntimeError::new("A static object with the same key already exists")));
         }
 
-        self.get_static_root().append_child(obj_id);
+        self.object_pool.get_static_root().append_child(obj_id);
         self.static_objects.insert(key, obj_id);
     }
 
     pub fn create_static_object<K: ToString>(&mut self, key: K, obj: Box<Object>) {
-        let obj_id = self.allocate_object(obj);
+        let obj_id = self.object_pool.allocate(obj);
         self.set_static_object(key, obj_id);
     }
 
@@ -144,7 +107,7 @@ impl ExecutorImpl {
     }
 
     pub fn get_static_object_ref<'a, K: AsRef<str>>(&self, key: K) -> Option<ObjectHandle<'a>> {
-        self.get_static_object(key).map(|id| self.get_object(id))
+        self.get_static_object(key).map(|id| self.object_pool.get(id))
     }
 
     fn eval_basic_blocks_impl(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> EvalControlMessage {
@@ -155,23 +118,23 @@ impl ExecutorImpl {
         for op in &basic_blocks[basic_block_id].opcodes {
             match *op {
                 OpCode::LoadNull => {
-                    let obj = self.allocate_object(Box::new(primitive::Null::new()));
+                    let obj = self.object_pool.allocate(Box::new(primitive::Null::new()));
                     self.get_current_frame().push_exec(obj);
                 },
                 OpCode::LoadInt(value) => {
-                    let obj = self.allocate_object(Box::new(primitive::Int::new(value)));
+                    let obj = self.object_pool.allocate(Box::new(primitive::Int::new(value)));
                     self.get_current_frame().push_exec(obj);
                 },
                 OpCode::LoadFloat(value) => {
-                    let obj = self.allocate_object(Box::new(primitive::Float::new(value)));
+                    let obj = self.object_pool.allocate(Box::new(primitive::Float::new(value)));
                     self.get_current_frame().push_exec(obj);
                 },
                 OpCode::LoadBool(value) => {
-                    let obj = self.allocate_object(Box::new(primitive::Bool::new(value)));
+                    let obj = self.object_pool.allocate(Box::new(primitive::Bool::new(value)));
                     self.get_current_frame().push_exec(obj);
                 },
                 OpCode::LoadString(ref value) => {
-                    let obj = self.allocate_object(Box::new(primitive::StringObject::new(value)));
+                    let obj = self.object_pool.allocate(Box::new(primitive::StringObject::new(value)));
                     self.get_current_frame().push_exec(obj);
                 },
                 OpCode::Call => {
@@ -181,7 +144,7 @@ impl ExecutorImpl {
                         let target = frame.pop_exec();
                         let n_args_obj = frame.pop_exec();
 
-                        let n_args = self.get_object(n_args_obj).to_i64();
+                        let n_args = self.object_pool.get(n_args_obj).to_i64();
                         if n_args < 0 {
                             panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of arguments")));
                         }
@@ -200,7 +163,7 @@ impl ExecutorImpl {
                 OpCode::InitLocal => {
                     let frame = self.get_current_frame();
                     let n_slots_obj = frame.pop_exec();
-                    let n_slots = self.get_object(n_slots_obj).to_i64();
+                    let n_slots = self.object_pool.get(n_slots_obj).to_i64();
                     if n_slots < 0 {
                         panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of slots")));
                     }
@@ -210,7 +173,7 @@ impl ExecutorImpl {
                 OpCode::GetLocal => {
                     let frame = self.get_current_frame();
                     let ind_obj = frame.pop_exec();
-                    let ind = self.get_object(ind_obj).to_i64();
+                    let ind = self.object_pool.get(ind_obj).to_i64();
 
                     if ind < 0 {
                         panic!(errors::VMError::from(errors::RuntimeError::new("Invalid index")));
@@ -222,7 +185,7 @@ impl ExecutorImpl {
                 OpCode::SetLocal => {
                     let frame = self.get_current_frame();
                     let ind_obj = frame.pop_exec();
-                    let ind = self.get_object(ind_obj).to_i64();
+                    let ind = self.object_pool.get(ind_obj).to_i64();
 
                     let obj_id = frame.pop_exec();
 
@@ -233,19 +196,19 @@ impl ExecutorImpl {
                 },
                 OpCode::GetStatic => {
                     let key_obj_id = self.get_current_frame().pop_exec();
-                    let key = self.get_object(key_obj_id).to_string();
+                    let key = self.object_pool.get(key_obj_id).to_string();
 
                     let maybe_target_obj = self.static_objects.get(key.as_str()).map(|v| *v);
                     if let Some(target_obj) = maybe_target_obj {
                         self.get_current_frame().push_exec(target_obj);
                     } else {
-                        let null_obj_id = self.allocate_object(Box::new(primitive::Null::new()));
+                        let null_obj_id = self.object_pool.allocate(Box::new(primitive::Null::new()));
                         self.get_current_frame().push_exec(null_obj_id);
                     }
                 },
                 OpCode::SetStatic => {
                     let key_obj_id = self.get_current_frame().pop_exec();
-                    let key = self.get_object(key_obj_id).to_string();
+                    let key = self.object_pool.get(key_obj_id).to_string();
 
                     let obj_id = self.get_current_frame().pop_exec();
 
@@ -253,7 +216,7 @@ impl ExecutorImpl {
                 },
                 OpCode::Branch => {
                     let target_id_obj_id = self.get_current_frame().pop_exec();
-                    let target_id = self.get_object(target_id_obj_id).to_i64();
+                    let target_id = self.object_pool.get(target_id_obj_id).to_i64();
 
                     if target_id < 0 {
                         panic!(errors::VMError::from(errors::RuntimeError::new("Invalid target id")));
@@ -264,9 +227,9 @@ impl ExecutorImpl {
                     let (should_branch, target_id) = {
                         let frame = self.get_current_frame();
                         let condition_obj_id = frame.pop_exec();
-                        let condition_obj = self.get_object(condition_obj_id);
+                        let condition_obj = self.object_pool.get(condition_obj_id);
                         let target_id_obj_id = frame.pop_exec();
-                        let target_id = self.get_object(target_id_obj_id).to_i64();
+                        let target_id = self.object_pool.get(target_id_obj_id).to_i64();
 
                         if target_id < 0 {
                             panic!(errors::VMError::from(errors::RuntimeError::new("Invalid target id")));
@@ -324,16 +287,6 @@ impl ExecutorImpl {
                 } else {
                     panic!("Unknown error from VM");
                 }
-            }
-        }
-    }
-}
-
-impl Drop for ExecutorImpl {
-    fn drop(&mut self) {
-        for obj in &mut self.objects {
-            if let Some(ref mut obj) = *obj {
-                obj.gc_notify();
             }
         }
     }

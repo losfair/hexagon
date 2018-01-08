@@ -6,6 +6,7 @@ pub mod errors;
 pub mod executor;
 pub mod function;
 pub mod object_info;
+pub mod object_pool;
 pub mod object;
 pub mod opcode;
 pub mod primitive;
