@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use object::Object;
 use call_stack::{CallStack, Frame};
-use static_root::StaticRoot;
 use opcode::OpCode;
 use errors;
 use primitive;
 use basic_block::BasicBlock;
-use object_info::{ObjectInfo, ObjectHandle, TypedObjectHandle};
+use object_info::{ObjectHandle};
 use object_pool::ObjectPool;
 
 pub struct Executor {

@@ -1,7 +1,6 @@
-use std::any::Any;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use smallvec::SmallVec;
-use object::Object;
 use errors;
 
 pub struct CallStack {
@@ -31,6 +30,22 @@ impl CallStack {
 
     pub fn top(&self) -> &Frame {
         &self.frames[self.frames.len() - 1]
+    }
+
+    pub fn collect_objects(&self) -> Vec<usize> {
+        let mut objs = HashSet::new();
+        for frame in &self.frames {
+            for v in frame.arguments.borrow().iter() {
+                objs.insert(*v);
+            }
+            for v in frame.locals.borrow().iter() {
+                objs.insert(*v);
+            }
+            for v in frame.exec_stack.borrow().iter() {
+                objs.insert(*v);
+            }
+        }
+        objs.into_iter().collect()
     }
 }
 

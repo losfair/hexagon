@@ -1,6 +1,7 @@
 use object::Object;
 use object_info::{ObjectInfo, ObjectHandle, TypedObjectHandle};
 use static_root::StaticRoot;
+use call_stack::CallStack;
 
 pub struct ObjectPool {
     objects: Vec<Option<ObjectInfo>>,
@@ -30,7 +31,7 @@ impl ObjectPool {
         id
     }
 
-    pub fn deallocate(&mut self, id: usize) {
+    fn deallocate(&mut self, id: usize) {
         let objects = &mut self.objects;
         let pool = &mut self.object_idx_pool;
 
@@ -50,6 +51,38 @@ impl ObjectPool {
 
     pub fn get_static_root<'a>(&self) -> TypedObjectHandle<'a, StaticRoot> {
         self.get_typed(0).unwrap()
+    }
+
+    pub fn collect(&mut self, stack: &CallStack) {
+        let mut visited: Vec<bool> = vec![false; self.objects.len()];
+
+        let mut dfs: Vec<usize> = Vec::new();
+        dfs.push(0); // static root
+
+        for id in stack.collect_objects() {
+            visited[id] = true;
+            dfs.push(id);
+        }
+
+        while !dfs.is_empty() {
+            let id = dfs.pop().unwrap();
+
+            if visited[id] {
+                continue;
+            }
+            visited[id] = true;
+
+            let obj = &self.objects[id].as_ref().unwrap();
+            for child in obj.as_object().get_children() {
+                dfs.push(child);
+            }
+        }
+
+        for i in 0..visited.len() {
+            if self.objects[i].is_some() && !visited[i] {
+                self.deallocate(i);
+            }
+        }
     }
 }
 

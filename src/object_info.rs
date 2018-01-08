@@ -42,6 +42,10 @@ impl ObjectInfo {
         self.native_ref_info.gc_notified = true;
     }
 
+    pub fn as_object(&self) -> &Object {
+        &*self.object
+    }
+
     pub fn handle<'a>(&self) -> ObjectHandle<'a> {
         ObjectHandle {
             object: unsafe {
