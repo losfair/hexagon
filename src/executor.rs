@@ -267,6 +267,10 @@ impl ExecutorImpl {
         }
     }
 
+    pub fn gc(&mut self) {
+        self.object_pool.collect(&self.stack);
+    }
+
     pub fn run_callable<K: AsRef<str>>(&mut self, key: K) -> Result<(), errors::VMError> {
         let callable_obj_id = self.get_static_object(key).unwrap_or_else(|| {
             panic!(errors::VMError::from(errors::RuntimeError::new("Static object not found")));

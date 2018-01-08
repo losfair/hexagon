@@ -25,6 +25,8 @@ fn test_executor() {
         Err(e) => panic!(e.unwrap().to_string())
     }
 
+    handle.gc();
+
     let output_slot = handle.get_static_object_ref("output").unwrap();
     let result = output_slot.as_any().downcast_ref::<Int>().unwrap().to_i64();
 
