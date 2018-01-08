@@ -174,6 +174,9 @@ impl ExecutorImpl {
                 OpCode::Pop => {
                     self.get_current_frame().pop_exec();
                 },
+                OpCode::Dup => {
+                    self.get_current_frame().dup_exec();
+                },
                 OpCode::InitLocal => {
                     let frame = self.get_current_frame();
                     let n_slots_obj = frame.pop_exec();
@@ -259,33 +262,23 @@ impl ExecutorImpl {
 
                     target_obj.set_field(key, value_obj_id);
                 },
-                OpCode::Branch => {
-                    let target_id_obj_id = self.get_current_frame().pop_exec();
-                    let target_id = self.object_pool.get(target_id_obj_id).to_i64();
-
-                    if target_id < 0 {
-                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid target id")));
-                    }
-                    return EvalControlMessage::Redirect(target_id as usize);
+                OpCode::Branch(target_id) => {
+                    return EvalControlMessage::Redirect(target_id);
                 },
-                OpCode::ConditionalBranch => {
-                    let (should_branch, target_id) = {
+                OpCode::ConditionalBranch(if_true, if_false) => {
+                    let condition_is_true = {
                         let frame = self.get_current_frame();
                         let condition_obj_id = frame.pop_exec();
                         let condition_obj = self.object_pool.get(condition_obj_id);
-                        let target_id_obj_id = frame.pop_exec();
-                        let target_id = self.object_pool.get(target_id_obj_id).to_i64();
 
-                        if target_id < 0 {
-                            panic!(errors::VMError::from(errors::RuntimeError::new("Invalid target id")));
-                        }
-
-                        (condition_obj.to_bool(), target_id)
+                        condition_obj.to_bool()
                     };
 
-                    if should_branch {
-                        return EvalControlMessage::Redirect(target_id as usize);
-                    }
+                    return EvalControlMessage::Redirect(if condition_is_true {
+                        if_true
+                    } else {
+                        if_false
+                    });
                 },
                 OpCode::Return => {
                     let ret_val = self.get_current_frame().pop_exec();

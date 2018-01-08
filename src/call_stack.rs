@@ -72,6 +72,16 @@ impl Frame {
         }
     }
 
+    pub fn dup_exec(&self) {
+        let mut stack = self.exec_stack.borrow_mut();
+        if stack.is_empty() {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")));
+        }
+
+        let last = stack[stack.len() - 1];
+        stack.push(last);
+    }
+
     pub fn reset_locals(&self, n_slots: usize) {
         let mut locals = self.locals.borrow_mut();
         locals.clear();
