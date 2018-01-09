@@ -4,7 +4,8 @@ use smallvec::SmallVec;
 use errors;
 
 pub struct CallStack {
-    frames: Vec<Frame>
+    frames: Vec<Frame>,
+    limit: Option<usize>
 }
 
 pub struct Frame {
@@ -17,11 +18,21 @@ pub struct Frame {
 impl CallStack {
     pub fn new() -> CallStack {
         CallStack {
-            frames: Vec::new()
+            frames: Vec::new(),
+            limit: None
         }
     }
 
+    pub fn set_limit(&mut self, limit: usize) {
+        self.limit = Some(limit);
+    }
+
     pub fn push(&mut self, frame: Frame) {
+        if let Some(limit) = self.limit {
+            if self.frames.len() >= limit {
+                panic!(errors::VMError::from(errors::RuntimeError::new("Virtual stack overflow")));
+            }
+        }
         self.frames.push(frame);
     }
 

@@ -65,6 +65,10 @@ impl ExecutorImpl {
         &mut self.object_pool
     }
 
+    pub fn set_stack_limit(&mut self, limit: usize) {
+        self.stack.set_limit(limit);
+    }
+
     fn invoke(&mut self, callable_obj_id: usize, this: usize, args: &[usize]) {
         let frame = Frame::with_arguments(this, args);
 
