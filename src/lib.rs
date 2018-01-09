@@ -13,6 +13,7 @@ pub mod object;
 pub mod opcode;
 pub mod primitive;
 pub mod static_root;
+pub mod value;
 
 #[cfg(test)]
 pub mod executor_test;
