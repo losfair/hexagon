@@ -180,39 +180,19 @@ impl ExecutorImpl {
                 OpCode::Dup => {
                     self.get_current_frame().dup_exec();
                 },
-                OpCode::InitLocal => {
+                OpCode::InitLocal(n_slots) => {
                     let frame = self.get_current_frame();
-                    let n_slots_obj = frame.pop_exec();
-                    let n_slots = self.object_pool.get_direct(n_slots_obj).to_i64();
-                    if n_slots < 0 {
-                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of slots")));
-                    }
-
-                    frame.reset_locals(n_slots as usize);
+                    frame.reset_locals(n_slots);
                 },
-                OpCode::GetLocal => {
+                OpCode::GetLocal(ind) => {
                     let frame = self.get_current_frame();
-                    let ind_obj = frame.pop_exec();
-                    let ind = self.object_pool.get_direct(ind_obj).to_i64();
-
-                    if ind < 0 {
-                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid index")));
-                    }
-
-                    let ret = frame.get_local(ind as usize);
+                    let ret = frame.get_local(ind);
                     frame.push_exec(ret);
                 },
-                OpCode::SetLocal => {
+                OpCode::SetLocal(ind) => {
                     let frame = self.get_current_frame();
-                    let ind_obj = frame.pop_exec();
-                    let ind = self.object_pool.get_direct(ind_obj).to_i64();
-
                     let obj_id = frame.pop_exec();
-
-                    if ind < 0 {
-                        panic!(errors::VMError::from(errors::RuntimeError::new("Invalid index")));
-                    }
-                    frame.set_local(ind as usize, obj_id);
+                    frame.set_local(ind, obj_id);
                 },
                 OpCode::GetStatic => {
                     let key_obj_id = self.get_current_frame().pop_exec();

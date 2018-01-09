@@ -8,9 +8,9 @@ pub enum OpCode {
     LoadThis,
     Pop,
     Dup,
-    InitLocal,
-    GetLocal,
-    SetLocal,
+    InitLocal(usize),
+    GetLocal(usize),
+    SetLocal(usize),
     GetStatic,
     SetStatic,
     GetField,
@@ -49,9 +49,9 @@ impl OpCode {
             LoadNull | LoadInt(_) | LoadFloat(_) | LoadString(_) | LoadBool(_) | LoadThis => (0, 1), // pushes the value
             Pop => (1, 0), // pops the object on the top
             Dup => (0, 1), // duplicates the object on the top
-            InitLocal => (1, 0), // pops size
-            GetLocal => (1, 1), // pops id, pushes object
-            SetLocal => (2, 0), // pops id & object
+            InitLocal(_) => (0, 0),
+            GetLocal(_) => (0, 1), // pushes object
+            SetLocal(_) => (1, 0), // pops object
             GetStatic => (1, 1), // pops name, pushes object
             SetStatic => (2, 0), // pops name & object
             GetField => (2, 1), // pops target object & key, pushes object

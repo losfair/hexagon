@@ -15,25 +15,19 @@ fn test_executor() {
     let sum_fn = Box::new(Function::from_basic_blocks(vec! [
         // bb 0
         BasicBlock::from_opcodes(vec! [
-            { OpCode::LoadInt(8) },
-            { OpCode::InitLocal },
+            { OpCode::InitLocal(8) },
             { OpCode::LoadInt(0) }, // current (initial) value
-            { OpCode::LoadInt(0) }, // slot id
-            { OpCode::SetLocal },
+            { OpCode::SetLocal(0) },
             { OpCode::LoadInt(END) }, // end value (exclusive)
-            { OpCode::LoadInt(1) }, // slot id
-            { OpCode::SetLocal },
+            { OpCode::SetLocal(1) },
             { OpCode::LoadInt(0) }, // sum
-            { OpCode::LoadInt(2) }, // slot id
-            { OpCode::SetLocal },
+            { OpCode::SetLocal(2) },
             { OpCode::Branch(1) }
         ]),
         // bb 1
         BasicBlock::from_opcodes(vec! [
-            { OpCode::LoadInt(1) },
-            { OpCode::GetLocal },
-            { OpCode::LoadInt(0) },
-            { OpCode::GetLocal },
+            { OpCode::GetLocal(1) },
+            { OpCode::GetLocal(0) },
             { OpCode::TestLt },
             { OpCode::Not },
             { OpCode::ConditionalBranch(3, 2) }
@@ -41,23 +35,18 @@ fn test_executor() {
         // bb 2
         BasicBlock::from_opcodes(vec! [
             { OpCode::LoadInt(1) },
-            { OpCode::LoadInt(0) },
-            { OpCode::GetLocal },
+            { OpCode::GetLocal(0) },
             { OpCode::IntAdd },
             { OpCode::Dup },
-            { OpCode::LoadInt(0) },
-            { OpCode::SetLocal },
-            { OpCode::LoadInt(2) },
-            { OpCode::GetLocal },
+            { OpCode::SetLocal(0) },
+            { OpCode::GetLocal(2) },
             { OpCode::IntAdd },
-            { OpCode::LoadInt(2) },
-            { OpCode::SetLocal },
+            { OpCode::SetLocal(2) },
             { OpCode::Branch(1) }
         ]),
         // bb 3
         BasicBlock::from_opcodes(vec! [
-            { OpCode::LoadInt(2) },
-            { OpCode::GetLocal },
+            { OpCode::GetLocal(2) },
             { OpCode::Return }
         ])
     ]));
@@ -65,15 +54,12 @@ fn test_executor() {
 
     let blocks: Vec<BasicBlock> = vec! [
         BasicBlock::from_opcodes(vec! [
-            { OpCode::LoadInt(8) },
-            { OpCode::InitLocal },
+            { OpCode::InitLocal(8) },
             { OpCode::LoadString("sum".to_string()) },
             { OpCode::GetStatic },
-            { OpCode::LoadInt(0) },
-            { OpCode::SetLocal },
+            { OpCode::SetLocal(0) },
             { OpCode::LoadNull },
-            { OpCode::LoadInt(0) },
-            { OpCode::GetLocal },
+            { OpCode::GetLocal(0) },
             { OpCode::Call(0) },
             { OpCode::LoadString("output".to_string()) },
             { OpCode::SetStatic },
