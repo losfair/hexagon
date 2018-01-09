@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::UnsafeCell;
 use std::collections::HashSet;
 use smallvec::SmallVec;
 use errors;
@@ -8,11 +8,14 @@ pub struct CallStack {
     limit: Option<usize>
 }
 
+
+// [unsafe]
+// These fields are guaranteed to be accessed properly (as an implementation detail).
 pub struct Frame {
-    pub(crate) this: usize,
-    pub(crate) arguments: RefCell<SmallVec<[usize; 4]>>,
-    pub(crate) locals: RefCell<SmallVec<[usize; 16]>>,
-    pub(crate) exec_stack: RefCell<SmallVec<[usize; 16]>>
+    this: usize,
+    arguments: UnsafeCell<SmallVec<[usize; 4]>>,
+    locals: UnsafeCell<SmallVec<[usize; 16]>>,
+    exec_stack: UnsafeCell<SmallVec<[usize; 16]>>
 }
 
 impl CallStack {
@@ -48,13 +51,13 @@ impl CallStack {
         let mut objs = HashSet::new();
         for frame in &self.frames {
             objs.insert(frame.this);
-            for v in frame.arguments.borrow().iter() {
+            for v in unsafe { &*frame.arguments.get() }.iter() {
                 objs.insert(*v);
             }
-            for v in frame.locals.borrow().iter() {
+            for v in unsafe { &*frame.locals.get() }.iter() {
                 objs.insert(*v);
             }
-            for v in frame.exec_stack.borrow().iter() {
+            for v in unsafe { &*frame.exec_stack.get() }.iter() {
                 objs.insert(*v);
             }
         }
@@ -66,25 +69,25 @@ impl Frame {
     pub fn with_arguments(this: usize, args: &[usize]) -> Frame {
         Frame {
             this: this,
-            arguments: RefCell::new(args.into()),
-            locals: RefCell::new(SmallVec::new()),
-            exec_stack: RefCell::new(SmallVec::new())
+            arguments: UnsafeCell::new(args.into()),
+            locals: UnsafeCell::new(SmallVec::new()),
+            exec_stack: UnsafeCell::new(SmallVec::new())
         }
     }
 
     pub fn push_exec(&self, id: usize) {
-        self.exec_stack.borrow_mut().push(id);
+        unsafe { &mut *self.exec_stack.get() }.push(id);
     }
 
     pub fn pop_exec(&self) -> usize {
-        match self.exec_stack.borrow_mut().pop() {
+        match unsafe { &mut *self.exec_stack.get() }.pop() {
             Some(v) => v,
             None => panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")))
         }
     }
 
     pub fn dup_exec(&self) {
-        let mut stack = self.exec_stack.borrow_mut();
+        let stack = unsafe { &mut *self.exec_stack.get() };
         if stack.is_empty() {
             panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")));
         }
@@ -94,7 +97,7 @@ impl Frame {
     }
 
     pub fn reset_locals(&self, n_slots: usize) {
-        let mut locals = self.locals.borrow_mut();
+        let locals = unsafe { &mut *self.locals.get() };
         locals.clear();
         for _ in 0..n_slots {
             locals.push(0);
@@ -102,7 +105,7 @@ impl Frame {
     }
 
     pub fn get_local(&self, ind: usize) -> usize {
-        let locals = self.locals.borrow();
+        let locals = unsafe { &*self.locals.get() };
         if ind >= locals.len() {
             panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
         }
@@ -111,7 +114,7 @@ impl Frame {
     }
 
     pub fn set_local(&self, ind: usize, obj_id: usize) {
-        let mut locals = self.locals.borrow_mut();
+        let locals = unsafe { &mut *self.locals.get() };
         if ind >= locals.len() {
             panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
         }
@@ -120,7 +123,7 @@ impl Frame {
     }
 
     pub fn get_argument(&self, id: usize) -> Option<usize> {
-        let args = self.arguments.borrow();
+        let args = unsafe { &*self.arguments.get() };
         if id < args.len() {
             Some(args[id])
         } else {
@@ -133,7 +136,7 @@ impl Frame {
     }
 
     pub fn get_n_arguments(&self) -> usize {
-        self.arguments.borrow().len()
+        unsafe { &*self.arguments.get() }.len()
     }
 
     pub fn get_this(&self) -> usize {
