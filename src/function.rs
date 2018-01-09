@@ -2,6 +2,7 @@ use std::any::Any;
 use object::Object;
 use basic_block::BasicBlock;
 use executor::ExecutorImpl;
+use errors;
 
 pub enum Function {
     Virtual(VirtualFunction),
@@ -41,6 +42,12 @@ impl Object for Function {
 
 impl Function {
     pub fn from_basic_blocks(blocks: Vec<BasicBlock>) -> Function {
+        for bb in &blocks {
+            bb.validate().unwrap_or_else(|e| {
+                panic!(errors::VMError::from(e))
+            });
+        }
+
         Function::Virtual(VirtualFunction {
             basic_blocks: blocks
         })

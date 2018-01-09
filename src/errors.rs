@@ -21,6 +21,36 @@ impl VMError {
     }
 }
 
+pub struct ValidateError {
+    description: String
+}
+
+impl Object for ValidateError {
+    fn get_children(&self) -> Vec<usize> {
+        Vec::new()
+    }
+
+    fn as_any(&self) -> &Any {
+        self as &Any
+    }
+
+    fn as_any_mut(&mut self) -> &mut Any {
+        self as &mut Any
+    }
+
+    fn to_str(&self) -> &str {
+        self.description.as_str()
+    }
+}
+
+impl ValidateError {
+    pub fn new<T: ToString>(desc: T) -> ValidateError {
+        ValidateError {
+            description: desc.to_string()
+        }
+    }
+}
+
 pub struct RuntimeError {
     description: String
 }
@@ -38,8 +68,8 @@ impl Object for RuntimeError {
         self as &mut Any
     }
 
-    fn to_string(&self) -> String {
-        self.description.clone()
+    fn to_str(&self) -> &str {
+        self.description.as_str()
     }
 }
 

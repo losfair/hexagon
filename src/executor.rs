@@ -159,20 +159,14 @@ impl ExecutorImpl {
                     let frame = self.get_current_frame();
                     frame.push_exec(frame.get_this());
                 },
-                OpCode::Call => {
+                OpCode::Call(n_args) => {
                     let (target, this, args) = {
                         let frame = self.get_current_frame();
 
                         let target = frame.pop_exec();
                         let this = frame.pop_exec();
-                        let n_args_obj = frame.pop_exec();
 
-                        let n_args = self.object_pool.get_direct(n_args_obj).to_i64();
-                        if n_args < 0 {
-                            panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of arguments")));
-                        }
-
-                        let args: SmallVec<[usize; 4]> = (0..(n_args as usize))
+                        let args: SmallVec<[usize; 4]> = (0..n_args)
                             .map(|_| frame.pop_exec())
                             .collect();
 
