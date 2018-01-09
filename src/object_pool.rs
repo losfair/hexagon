@@ -53,6 +53,20 @@ impl ObjectPool {
         self.objects[id].as_ref().unwrap().handle()
     }
 
+    pub fn get_direct(&self, id: usize) -> &Object {
+        self.objects[id].as_ref().unwrap().as_object()
+    }
+
+    pub fn get_direct_typed<T: 'static>(&self, id: usize) -> Option<&T> {
+        self.get_direct(id).as_any().downcast_ref::<T>()
+    }
+
+    pub fn must_get_direct_typed<T: 'static>(&self, id: usize) -> &T {
+        self.get_direct_typed(id).unwrap_or_else(|| {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Type mismatch")))
+        })
+    }
+
     pub fn get_typed<'a, T: 'static>(&self, id: usize) -> Option<TypedObjectHandle<'a, T>> {
         TypedObjectHandle::downcast_from(self.get(id))
     }

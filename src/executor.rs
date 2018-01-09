@@ -167,7 +167,7 @@ impl ExecutorImpl {
                         let this = frame.pop_exec();
                         let n_args_obj = frame.pop_exec();
 
-                        let n_args = self.object_pool.get(n_args_obj).to_i64();
+                        let n_args = self.object_pool.get_direct(n_args_obj).to_i64();
                         if n_args < 0 {
                             panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of arguments")));
                         }
@@ -189,7 +189,7 @@ impl ExecutorImpl {
                 OpCode::InitLocal => {
                     let frame = self.get_current_frame();
                     let n_slots_obj = frame.pop_exec();
-                    let n_slots = self.object_pool.get(n_slots_obj).to_i64();
+                    let n_slots = self.object_pool.get_direct(n_slots_obj).to_i64();
                     if n_slots < 0 {
                         panic!(errors::VMError::from(errors::RuntimeError::new("Invalid number of slots")));
                     }
@@ -199,7 +199,7 @@ impl ExecutorImpl {
                 OpCode::GetLocal => {
                     let frame = self.get_current_frame();
                     let ind_obj = frame.pop_exec();
-                    let ind = self.object_pool.get(ind_obj).to_i64();
+                    let ind = self.object_pool.get_direct(ind_obj).to_i64();
 
                     if ind < 0 {
                         panic!(errors::VMError::from(errors::RuntimeError::new("Invalid index")));
@@ -211,7 +211,7 @@ impl ExecutorImpl {
                 OpCode::SetLocal => {
                     let frame = self.get_current_frame();
                     let ind_obj = frame.pop_exec();
-                    let ind = self.object_pool.get(ind_obj).to_i64();
+                    let ind = self.object_pool.get_direct(ind_obj).to_i64();
 
                     let obj_id = frame.pop_exec();
 
@@ -222,9 +222,9 @@ impl ExecutorImpl {
                 },
                 OpCode::GetStatic => {
                     let key_obj_id = self.get_current_frame().pop_exec();
-                    let key = self.object_pool.get(key_obj_id).to_str();
-
+                    let key = self.object_pool.get_direct(key_obj_id).to_str();
                     let maybe_target_obj = self.static_objects.get(key).map(|v| *v);
+
                     if let Some(target_obj) = maybe_target_obj {
                         self.get_current_frame().push_exec(target_obj);
                     } else {
@@ -234,7 +234,7 @@ impl ExecutorImpl {
                 },
                 OpCode::SetStatic => {
                     let key_obj_id = self.get_current_frame().pop_exec();
-                    let key = self.object_pool.get(key_obj_id).to_string();
+                    let key = self.object_pool.get_direct(key_obj_id).to_string();
 
                     let obj_id = self.get_current_frame().pop_exec();
 
@@ -246,8 +246,8 @@ impl ExecutorImpl {
                     let target_obj_id = self.get_current_frame().pop_exec();
                     let key_obj_id = self.get_current_frame().pop_exec();
 
-                    let target_obj = self.object_pool.get(target_obj_id);
-                    let key = self.object_pool.get(key_obj_id).to_str();
+                    let target_obj = self.object_pool.get_direct(target_obj_id);
+                    let key = self.object_pool.get_direct(key_obj_id).to_str();
 
                     if let Some(v) = target_obj.get_field(key) {
                         self.get_current_frame().push_exec(v);
@@ -266,8 +266,8 @@ impl ExecutorImpl {
                         )
                     };
 
-                    let target_obj = self.object_pool.get(target_obj_id);
-                    let key = self.object_pool.get(key_obj_id).to_str();
+                    let target_obj = self.object_pool.get_direct(target_obj_id);
+                    let key = self.object_pool.get_direct(key_obj_id).to_str();
 
                     target_obj.set_field(key, value_obj_id);
                 },
@@ -278,7 +278,7 @@ impl ExecutorImpl {
                     let condition_is_true = {
                         let frame = self.get_current_frame();
                         let condition_obj_id = frame.pop_exec();
-                        let condition_obj = self.object_pool.get(condition_obj_id);
+                        let condition_obj = self.object_pool.get_direct(condition_obj_id);
 
                         condition_obj.to_bool()
                     };
@@ -298,8 +298,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Int>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
                         )
                     };
 
@@ -311,8 +311,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Int>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
                         )
                     };
 
@@ -324,8 +324,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Int>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
                         )
                     };
 
@@ -337,8 +337,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Int>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
                         )
                     };
 
@@ -350,8 +350,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Int>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
                         )
                     };
 
@@ -363,8 +363,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Int>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
                         )
                     };
 
@@ -376,8 +376,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Float>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
                         )
                     };
 
@@ -389,8 +389,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Float>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
                         )
                     };
 
@@ -402,8 +402,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Float>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
                         )
                     };
 
@@ -415,8 +415,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Float>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
                         )
                     };
 
@@ -428,8 +428,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Int>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
                         )
                     };
 
@@ -441,8 +441,8 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_typed::<primitive::Float>(right).value
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
+                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
                         )
                     };
 
@@ -451,28 +451,28 @@ impl ExecutorImpl {
                 },
                 OpCode::CastToFloat => {
                     let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get(value).to_f64();
+                    let value = self.object_pool.get_direct(value).to_f64();
 
                     let result = self.object_pool.allocate(Box::new(primitive::Float::new(value)));
                     self.get_current_frame().push_exec(result);
                 },
                 OpCode::CastToInt => {
                     let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get(value).to_i64();
+                    let value = self.object_pool.get_direct(value).to_i64();
 
                     let result = self.object_pool.allocate(Box::new(primitive::Int::new(value)));
                     self.get_current_frame().push_exec(result);
                 },
                 OpCode::CastToBool => {
                     let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get(value).to_bool();
+                    let value = self.object_pool.get_direct(value).to_bool();
 
                     let result = self.object_pool.allocate(Box::new(primitive::Bool::new(value)));
                     self.get_current_frame().push_exec(result);
                 },
                 OpCode::Not => {
                     let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get(value).to_bool();
+                    let value = self.object_pool.get_direct(value).to_bool();
 
                     let result = self.object_pool.allocate(Box::new(primitive::Bool::new(!value)));
                     self.get_current_frame().push_exec(result);
@@ -481,7 +481,7 @@ impl ExecutorImpl {
                     let ord = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        self.object_pool.get(left).compare(*self.object_pool.get(right))
+                        self.object_pool.get_direct(left).compare(self.object_pool.get_direct(right))
                     };
 
                     let result = self.object_pool.allocate(Box::new(primitive::Bool::new(
@@ -493,7 +493,7 @@ impl ExecutorImpl {
                     let ok = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        self.object_pool.get(left).test_eq(*self.object_pool.get(right))
+                        self.object_pool.get_direct(left).test_eq(self.object_pool.get_direct(right))
                     };
 
                     let result = self.object_pool.allocate(Box::new(primitive::Bool::new(
@@ -505,7 +505,7 @@ impl ExecutorImpl {
                     let ord = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        self.object_pool.get(left).compare(*self.object_pool.get(right))
+                        self.object_pool.get_direct(left).compare(self.object_pool.get_direct(right))
                     };
 
                     let result = self.object_pool.allocate(Box::new(primitive::Bool::new(

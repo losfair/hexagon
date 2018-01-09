@@ -1,3 +1,5 @@
+#![feature(nll)]
+
 extern crate smallvec;
 
 pub mod basic_block;
