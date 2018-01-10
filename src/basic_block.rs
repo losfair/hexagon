@@ -20,11 +20,14 @@ impl BasicBlock {
 
         for op in &mut itr {
             let (n_pops, n_pushes) = op.get_stack_depth_change();
-            let depth_change = n_pushes as isize - n_pops as isize;
-            if stack_depth + depth_change < 0 {
+
+            stack_depth -= n_pops as isize;
+
+            if stack_depth < 0 {
                 return Err(errors::ValidateError::new("Invalid use of stack"));
             }
-            stack_depth += depth_change;
+
+            stack_depth += n_pushes as isize;
 
             let terminated = match *op {
                 OpCode::ConditionalBranch(_, _)
