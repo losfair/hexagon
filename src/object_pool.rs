@@ -21,7 +21,7 @@ impl ObjectPool {
         }
     }
 
-    pub fn allocate(&mut self, inner: Box<Object>) -> usize {
+    pub fn allocate(&mut self, mut inner: Box<Object>) -> usize {
         inner.initialize(self);
 
         let id = if let Some(id) = self.object_idx_pool.pop() {
@@ -80,6 +80,10 @@ impl ObjectPool {
         self.get_typed(0).unwrap()
     }
 
+    pub fn get_direct_static_root(&self) -> &StaticRoot {
+        self.get_direct_typed(0).unwrap()
+    }
+
     pub fn get_alloc_count(&self) -> usize {
         self.alloc_count
     }
@@ -95,7 +99,6 @@ impl ObjectPool {
         dfs.push(0); // static root
 
         for id in stack.collect_objects() {
-            visited[id] = true;
             dfs.push(id);
         }
 
