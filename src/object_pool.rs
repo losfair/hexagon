@@ -22,6 +22,8 @@ impl ObjectPool {
     }
 
     pub fn allocate(&mut self, inner: Box<Object>) -> usize {
+        inner.initialize(self);
+
         let id = if let Some(id) = self.object_idx_pool.pop() {
             id
         } else {
@@ -30,9 +32,6 @@ impl ObjectPool {
             objects.len() - 1
         };
         self.objects[id] = Some(ObjectInfo::new(inner));
-
-        let handle = self.objects[id].as_ref().unwrap().handle();
-        handle.initialize(self);
 
         self.alloc_count += 1;
 
