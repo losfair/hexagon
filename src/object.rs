@@ -7,8 +7,8 @@ use object_pool::ObjectPool;
 pub trait Object {
     fn finalize(&self, _pool: &mut ObjectPool) {}
 
-    // after allocated on the executor...
-    fn initialize(&self, _pool: &mut ObjectPool) {}
+    // before allocating on the object pool...
+    fn initialize(&mut self, _pool: &mut ObjectPool) {}
 
     fn call(&self, _executor: &mut ExecutorImpl) -> usize {
         panic!(errors::VMError::from(errors::RuntimeError::new("Not callable")));

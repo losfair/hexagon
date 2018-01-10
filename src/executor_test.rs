@@ -12,7 +12,7 @@ fn test_executor() {
 
     const END: i64 = 100000;
 
-    let sum_fn = Box::new(Function::from_basic_blocks(vec! [
+    let mut sum_fn = Box::new(Function::from_basic_blocks(vec! [
         // bb 0
         BasicBlock::from_opcodes(vec! [
             { OpCode::InitLocal(8) },
@@ -50,6 +50,7 @@ fn test_executor() {
             { OpCode::Return }
         ])
     ]));
+    sum_fn.enable_optimization();
     handle.create_static_object("sum", sum_fn);
 
     let blocks: Vec<BasicBlock> = vec! [

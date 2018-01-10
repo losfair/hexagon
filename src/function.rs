@@ -1,8 +1,10 @@
 use std::any::Any;
 use object::Object;
+use object_pool::ObjectPool;
 use basic_block::BasicBlock;
 use executor::ExecutorImpl;
 use errors;
+use function_optimizer::FunctionOptimizer;
 
 pub enum Function {
     Virtual(VirtualFunction),
@@ -10,14 +12,27 @@ pub enum Function {
 }
 
 pub struct VirtualFunction {
-    basic_blocks: Vec<BasicBlock>
+    basic_blocks: Vec<BasicBlock>,
+    rt_handles: Vec<usize>,
+    should_optimize: bool
 }
 
 pub type NativeFunction = Box<Fn(&mut ExecutorImpl) -> usize>;
 
 impl Object for Function {
+    fn initialize(&mut self, pool: &mut ObjectPool) {
+        if let Function::Virtual(ref mut f) = *self {
+            if f.should_optimize {
+                f.optimize(pool);
+            }
+        }
+    }
+
     fn get_children(&self) -> Vec<usize> {
-        Vec::new()
+        match *self {
+            Function::Virtual(ref f) => f.rt_handles.clone(),
+            Function::Native(_) => Vec::new()
+        }
     }
 
     fn as_any(&self) -> &Any {
@@ -42,18 +57,75 @@ impl Object for Function {
 
 impl Function {
     pub fn from_basic_blocks(blocks: Vec<BasicBlock>) -> Function {
-        for bb in &blocks {
-            bb.validate().unwrap_or_else(|e| {
-                panic!(errors::VMError::from(e))
-            });
-        }
+        let vf = VirtualFunction {
+            basic_blocks: blocks,
+            rt_handles: Vec::new(),
+            should_optimize: false
+        };
 
-        Function::Virtual(VirtualFunction {
-            basic_blocks: blocks
-        })
+        vf.validate().unwrap_or_else(|e| {
+            panic!(errors::VMError::from(e))
+        });
+
+        Function::Virtual(vf)
+    }
+
+    pub fn enable_optimization(&mut self) {
+        if let Function::Virtual(ref mut f) = *self {
+            f.should_optimize = true;
+        } else {
+            panic!("Optimization is not supported on the current function type");
+        }
     }
 
     pub fn from_native(nf: NativeFunction) -> Function {
         Function::Native(nf)
+    }
+}
+
+impl VirtualFunction {
+    fn optimize(&mut self, pool: &mut ObjectPool) {
+        let mut optimizer = FunctionOptimizer::new(&mut self.basic_blocks, &mut self.rt_handles, pool);
+        optimizer.optimize();
+    }
+
+    pub fn validate(&self) -> Result<(), errors::ValidateError> {
+        self.validate_basic_blocks()?;
+        self.validate_branch_targets()?;
+        Ok(())
+    }
+
+    pub fn validate_basic_blocks(&self) -> Result<(), errors::ValidateError> {
+        for bb in &self.basic_blocks {
+            bb.validate(false)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn validate_branch_targets(&self) -> Result<(), errors::ValidateError> {
+        let blocks = &self.basic_blocks;
+
+        for bb in blocks {
+            let mut found_error: bool = false;
+
+            let (fst, snd) = bb.branch_targets();
+            if let Some(fst) = fst {
+                if fst >= blocks.len() {
+                    found_error = true;
+                }
+            }
+            if let Some(snd) = snd {
+                if snd >= blocks.len() {
+                    found_error = true;
+                }
+            }
+
+            if found_error {
+                return Err(errors::ValidateError::new("Invalid branch target(s)"));
+            }
+        }
+
+        Ok(())
     }
 }

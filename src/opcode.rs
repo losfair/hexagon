@@ -37,7 +37,14 @@ pub enum OpCode {
     Not,
     TestLt,
     TestEq,
-    TestGt
+    TestGt,
+
+    Rt(RtOpCode)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum RtOpCode {
+    LoadObject(usize)
 }
 
 impl OpCode {
@@ -65,7 +72,8 @@ impl OpCode {
             CastToFloat | CastToInt | CastToBool => (1, 1),
             Not => (1, 1),
             TestLt | TestEq | TestGt => (2, 1), // pops the two operands, pushes the result
-            Call(n_args) => (n_args + 2, 1) // pops target & this & arguments, pushes the result
+            Call(n_args) => (n_args + 2, 1), // pops target & this & arguments, pushes the result
+            Rt(_) => panic!("Unexpected runtime opcode")
         }
     }
 }

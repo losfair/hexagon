@@ -4,7 +4,7 @@ use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::cmp::Ordering;
 use object::Object;
 use call_stack::{CallStack, Frame};
-use opcode::OpCode;
+use opcode::{OpCode, RtOpCode};
 use errors;
 use primitive;
 use basic_block::BasicBlock;
@@ -486,6 +486,13 @@ impl ExecutorImpl {
                         ord == Some(Ordering::Greater)
                     )));
                     self.get_current_frame().push_exec(result);
+                },
+                OpCode::Rt(ref op) => {
+                    match *op {
+                        RtOpCode::LoadObject(id) => {
+                            self.get_current_frame().push_exec(id);
+                        }
+                    }
                 }
             }
         }

@@ -6,6 +6,7 @@ pub mod basic_block;
 pub mod call_stack;
 pub mod errors;
 pub mod executor;
+pub mod function_optimizer;
 pub mod function;
 pub mod object_info;
 pub mod object_pool;

@@ -13,12 +13,28 @@ impl BasicBlock {
         }
     }
 
-    pub fn validate(&self) -> Result<(), errors::ValidateError> {
+    pub fn branch_targets(&self) -> (Option<usize>, Option<usize>) {
+        let last_opcode = &self.opcodes[self.opcodes.len() - 1];
+        match *last_opcode {
+            OpCode::ConditionalBranch(if_true, if_false) => (Some(if_true), Some(if_false)),
+            OpCode::Branch(t) => (Some(t), None),
+            OpCode::Return => (None, None),
+            _ => panic!("Terminator not found")
+        }
+    }
+
+    pub fn validate(&self, allow_runtime_opcodes: bool) -> Result<(), errors::ValidateError> {
         let mut itr = self.opcodes.iter();
         let mut terminator_found: bool = false;
         let mut stack_depth: isize = 0;
 
         for op in &mut itr {
+            if !allow_runtime_opcodes {
+                if let OpCode::Rt(_) = *op {
+                    return Err(errors::ValidateError::new("Runtime opcodes are not allowed"));
+                }
+            }
+
             let (n_pops, n_pushes) = op.get_stack_depth_change();
 
             stack_depth -= n_pops as isize;
