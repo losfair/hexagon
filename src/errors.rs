@@ -51,6 +51,36 @@ impl ValidateError {
     }
 }
 
+pub struct ParseError {
+    description: String
+}
+
+impl Object for ParseError {
+    fn get_children(&self) -> Vec<usize> {
+        Vec::new()
+    }
+
+    fn as_any(&self) -> &Any {
+        self as &Any
+    }
+
+    fn as_any_mut(&mut self) -> &mut Any {
+        self as &mut Any
+    }
+
+    fn to_str(&self) -> &str {
+        self.description.as_str()
+    }
+}
+
+impl ParseError {
+    pub fn new<T: ToString>(desc: T) -> ParseError {
+        ParseError {
+            description: desc.to_string()
+        }
+    }
+}
+
 pub struct RuntimeError {
     description: String
 }
