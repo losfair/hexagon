@@ -16,9 +16,9 @@ fn test_executor() {
         // bb 0
         BasicBlock::from_opcodes(vec! [
             { OpCode::InitLocal(8) },
-            { OpCode::LoadInt(0) }, // current (initial) value
+            { OpCode::LoadInt(0) }, // current (initial) value (exclusive)
             { OpCode::SetLocal(0) },
-            { OpCode::LoadInt(END) }, // end value (exclusive)
+            { OpCode::LoadInt(END) }, // end value (inclusive)
             { OpCode::SetLocal(1) },
             { OpCode::LoadInt(0) }, // sum
             { OpCode::SetLocal(2) },
