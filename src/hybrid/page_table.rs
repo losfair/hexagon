@@ -235,4 +235,19 @@ impl PageTable {
             ::std::mem::transmute::<i64, [u8; 8]>(value)
         })
     }
+
+    pub fn read_f64<T: Into<AddrInfo>>(&mut self, vaddr: T) -> Option<f64> {
+        self.get(vaddr, 8).and_then(|mut view| {
+            match view.read_f64::<NativeEndian>() {
+                Ok(v) => Some(v),
+                Err(_) => None
+            }
+        })
+    }
+
+    pub fn write_f64<T: Into<AddrInfo>>(&mut self, vaddr: T, value: f64) -> bool {
+        self.set(vaddr, &unsafe {
+            ::std::mem::transmute::<f64, [u8; 8]>(value)
+        })
+    }
 }

@@ -54,6 +54,9 @@ fn test_types() {
 
     assert_eq!(pt.write_i64(0x0, -7889315787603), true);
     assert_eq!(pt.read_i64(0x0), Some(-7889315787603));
+
+    assert_eq!(pt.write_f64(0x0, 0.267207909), true);
+    assert!((pt.read_f64(0x0).unwrap() - 0.267207909).abs() < 1e-12);
 }
 
 #[test]
