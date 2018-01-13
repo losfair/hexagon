@@ -5,4 +5,7 @@ pub mod opcode;
 pub mod page_table;
 
 #[cfg(test)]
+mod executor_test;
+
+#[cfg(test)]
 mod page_table_test;

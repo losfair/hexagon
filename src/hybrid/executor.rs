@@ -318,6 +318,35 @@ impl Executor {
                         0
                     };
                 },
+                OpCode::SIConst8(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::SIConst16(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::SIConst32(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::SIConst64(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::UIConst8(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::UIConst16(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::UIConst32(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::UIConst64(target, v) => {
+                    local.regs[target] = v as u64;
+                },
+                OpCode::FConst64(target, v) => {
+                    local.regs[target] = unsafe {
+                        ::std::mem::transmute::<f64, u64>(v)
+                    };
+                },
                 OpCode::Load8(target, p) => {
                     let addr = local.regs[p];
                     local.regs[target] = self.page_table.read_u8(addr).unwrap() as u64;
@@ -349,6 +378,9 @@ impl Executor {
                 OpCode::Store64(src, p) => {
                     let addr = local.regs[p];
                     self.page_table.write_u64(addr, local.regs[src]);
+                },
+                OpCode::Mov(dst, src) => {
+                    local.regs[dst] = local.regs[src];
                 }
             }
         }

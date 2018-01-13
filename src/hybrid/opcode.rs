@@ -39,6 +39,15 @@ pub enum OpCode {
     FGt(usize, usize),
     Eq(usize, usize),
     Ne(usize, usize),
+    SIConst8(usize, i8),
+    SIConst16(usize, i16),
+    SIConst32(usize, i32),
+    SIConst64(usize, i64),
+    UIConst8(usize, u8),
+    UIConst16(usize, u16),
+    UIConst32(usize, u32),
+    UIConst64(usize, u64),
+    FConst64(usize, f64),
     Load8(usize, usize),
     Load16(usize, usize),
     Load32(usize, usize),
@@ -46,5 +55,6 @@ pub enum OpCode {
     Store8(usize, usize),
     Store16(usize, usize),
     Store32(usize, usize),
-    Store64(usize, usize)
+    Store64(usize, usize),
+    Mov(usize, usize)
 }
