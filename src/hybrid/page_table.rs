@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 use std::cell::UnsafeCell;
 use byteorder::{ReadBytesExt, NativeEndian};
@@ -5,6 +6,27 @@ use byteorder::{ReadBytesExt, NativeEndian};
 // N_PAGES * PAGE_SIZE = 2 ^ 32
 const N_PAGES: usize = 1024;
 const PAGE_SIZE: usize = 1048576;
+
+struct UnsafeData {
+    inner: UnsafeCell<Box<[u8]>>
+}
+
+impl Deref for UnsafeData {
+    type Target = UnsafeCell<Box<[u8]>>;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+unsafe impl Sync for UnsafeData {}
+
+impl UnsafeData {
+    fn new(inner: UnsafeCell<Box<[u8]>>) -> UnsafeData {
+        UnsafeData {
+            inner: inner
+        }
+    }
+}
 
 // Virtual pointers are 64-bit.
 // The upper 32 bits are used to specify the 'address space'
@@ -15,13 +37,16 @@ const PAGE_SIZE: usize = 1048576;
 // underlying data.
 //
 // PageTable must be Send.
+#[derive(Clone)]
 pub struct PageTable {
     pt_impl: Arc<PageTableImpl>,
-    page_cache: Vec<Option<Arc<UnsafeCell<Box<[u8]>>>>>
+    page_cache: Vec<Option<Arc<UnsafeData>>>
 }
 
+unsafe impl Sync for PageTable {}
+
 struct PageTableImpl {
-    pages: Mutex<Vec<Option<Arc<UnsafeCell<Box<[u8]>>>>>>
+    pages: Mutex<Vec<Option<Arc<UnsafeData>>>>
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -54,13 +79,15 @@ impl PageTableImpl {
         }
     }
 
-    fn create_page(&self, id: usize) -> Option<Arc<UnsafeCell<Box<[u8]>>>> {
+    fn create_page(&self, id: usize) -> Option<Arc<UnsafeData>> {
         let mut pages = self.pages.lock().unwrap();
         if id >= pages.len() {
             return None;
         }
 
-        pages[id] = Some(Arc::new(UnsafeCell::new(vec![0; PAGE_SIZE].into_boxed_slice())));
+        pages[id] = Some(Arc::new(UnsafeData::new(
+            UnsafeCell::new(vec![0; PAGE_SIZE].into_boxed_slice())
+        )));
         pages[id].clone()
     }
 }
