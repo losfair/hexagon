@@ -8,3 +8,4 @@ repository = "https://github.com/losfair/hexagon-vm-core"
 
 [dependencies]
 smallvec = "0.6"
+byteorder = "1"

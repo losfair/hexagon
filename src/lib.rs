@@ -1,6 +1,9 @@
 #![feature(nll)]
 
 extern crate smallvec;
+extern crate byteorder;
+
+pub mod hybrid;
 
 pub mod basic_block;
 pub mod call_stack;
@@ -17,4 +20,4 @@ pub mod static_root;
 pub mod value;
 
 #[cfg(test)]
-pub mod executor_test;
+mod executor_test;
