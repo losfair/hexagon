@@ -3,10 +3,13 @@ use super::function::Function;
 use super::opcode::OpCode;
 use super::type_cast;
 use super::program::Program;
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 pub struct Executor {
     page_table: PageTable,
-    globals: [u64; 16]
+    globals: [u64; 16],
+    call_stack_depth: usize,
+    max_call_stack_depth: usize
 }
 
 struct Local {
@@ -22,14 +25,18 @@ impl Executor {
     pub fn new() -> Executor {
         Executor {
             page_table: PageTable::new(),
-            globals: [0; 16]
+            globals: [0; 16],
+            call_stack_depth: 0,
+            max_call_stack_depth: 512
         }
     }
 
     pub fn with_page_table(pt: PageTable) -> Executor {
         Executor {
             page_table: pt,
-            globals: [0; 16]
+            globals: [0; 16],
+            call_stack_depth: 0,
+            max_call_stack_depth: 512
         }
     }
 
@@ -358,15 +365,27 @@ impl Executor {
 
         let entry = &program.functions[entry_fn];
 
-        loop {
-            match self.eval_partial(program, &mut local, entry, block_id) {
-                EvalControlMessage::Return => {
-                    break;
-                },
-                EvalControlMessage::Redirect(target) => {
-                    block_id = target;
+        if self.call_stack_depth >= self.max_call_stack_depth {
+            panic!("Max call stack depth exceeded");
+        }
+
+        self.call_stack_depth += 1;
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            loop {
+                match self.eval_partial(program, &mut local, entry, block_id) {
+                    EvalControlMessage::Return => {
+                        break;
+                    },
+                    EvalControlMessage::Redirect(target) => {
+                        block_id = target;
+                    }
                 }
             }
+        }));
+        self.call_stack_depth -= 1;
+
+        if let Err(e) = result {
+            resume_unwind(e);
         }
     }
 
