@@ -1,6 +1,6 @@
 use super::opcode::OpCode;
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BasicBlock {
     pub(super) opcodes: Vec<OpCode>
 }

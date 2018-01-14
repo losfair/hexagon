@@ -145,7 +145,7 @@ fn test_fn_call() {
             ])
         ])
     ]);
-    program.append_native_function(NativeFunction::new(&setter));
+    program.append_native_function(NativeFunction::new("set", &setter));
 
     let mut executor = Executor::new();
     executor.eval_program(&program, 0);

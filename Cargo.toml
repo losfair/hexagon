@@ -9,3 +9,6 @@ repository = "https://github.com/losfair/hexagon-vm-core"
 [dependencies]
 smallvec = "0.6"
 byteorder = "1"
+serde_derive = "1"
+bincode = "0.9"
+serde = "1"

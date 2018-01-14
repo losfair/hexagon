@@ -11,3 +11,6 @@ mod executor_test;
 
 #[cfg(test)]
 mod page_table_test;
+
+#[cfg(test)]
+mod program_test;
