@@ -93,3 +93,18 @@ impl<'a> Program<'a> {
         Some(program)
     }
 }
+
+impl<'a> ProgramInfo<'a> {
+    pub fn to_bincode(&self) -> Vec<u8> {
+        use bincode::{serialize, Infinite};
+        serialize(self, Infinite).unwrap()
+    }
+
+    pub fn from_bincode(bc: &'a [u8]) -> Option<ProgramInfo<'a>> {
+        use bincode::deserialize;
+        match deserialize(bc) {
+            Ok(v) => Some(v),
+            Err(_) => None
+        }
+    }
+}
