@@ -48,6 +48,10 @@ impl Executor {
         self.globals[id]
     }
 
+    pub fn write_global(&mut self, id: usize, value: u64) {
+        self.globals[id] = value;
+    }
+
     fn eval_partial(
         &mut self,
         program: &Program,
