@@ -1,7 +1,7 @@
 use opcode::OpCode;
 use errors;
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct BasicBlock {
     pub(crate) opcodes: Vec<OpCode>
 }

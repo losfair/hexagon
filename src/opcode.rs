@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum OpCode {
     LoadNull,
     LoadInt(i64),
@@ -39,6 +39,7 @@ pub enum OpCode {
     TestEq,
     TestGt,
 
+    #[serde(skip_serializing, skip_deserializing)]
     Rt(RtOpCode)
 }
 
