@@ -2,9 +2,11 @@ use super::page_table::PageTable;
 use super::function::Function;
 use super::opcode::OpCode;
 use super::type_cast;
+use super::program::Program;
 
 pub struct Executor {
-    page_table: PageTable
+    page_table: PageTable,
+    globals: [u64; 16]
 }
 
 struct Local {
@@ -19,13 +21,15 @@ enum EvalControlMessage {
 impl Executor {
     pub fn new() -> Executor {
         Executor {
-            page_table: PageTable::new()
+            page_table: PageTable::new(),
+            globals: [0; 16]
         }
     }
 
     pub fn with_page_table(pt: PageTable) -> Executor {
         Executor {
-            page_table: pt
+            page_table: pt,
+            globals: [0; 16]
         }
     }
 
@@ -33,8 +37,13 @@ impl Executor {
         &self.page_table
     }
 
+    pub fn read_global(&self, id: usize) -> u64 {
+        self.globals[id]
+    }
+
     fn eval_partial(
         &mut self,
+        program: &Program,
         local: &mut Local,
         f: &Function,
         block_id: usize
@@ -315,20 +324,42 @@ impl Executor {
                 },
                 OpCode::Mov(dst, src) => {
                     local.regs[dst] = local.regs[src];
+                },
+                OpCode::LoadGlobal(dst, src) => {
+                    local.regs[dst] = self.globals[src];
+                },
+                OpCode::StoreGlobal(dst, src) => {
+                    self.globals[dst] = local.regs[src];
+                },
+                OpCode::Call(target) => {
+                    self.eval_program(program, target);
+                },
+                OpCode::CallIndirect(target) => {
+                    let target = local.regs[target] as usize;
+                    self.eval_program(program, target);
+                },
+                OpCode::CallNative(target) => {
+                    program.native_functions[target].invoke(self);
+                },
+                OpCode::CallNativeIndirect(target) => {
+                    let target = local.regs[target] as usize;
+                    program.native_functions[target].invoke(self);
                 }
             }
         }
         panic!("Terminator not found");
     }
 
-    pub fn eval_function(&mut self, f: &Function) {
+    pub fn eval_program(&mut self, program: &Program, entry_fn: usize) {
         let mut local = Local {
             regs: [0u64; 16]
         };
         let mut block_id: usize = 0;
 
+        let entry = &program.functions[entry_fn];
+
         loop {
-            match self.eval_partial(&mut local, f, block_id) {
+            match self.eval_partial(program, &mut local, entry, block_id) {
                 EvalControlMessage::Return => {
                     break;
                 },
@@ -337,5 +368,9 @@ impl Executor {
                 }
             }
         }
+    }
+
+    pub fn eval_function(&mut self, f: &Function) {
+        self.eval_program(&Program::from_functions(vec! [ f.clone() ]), 0)
     }
 }

@@ -3,6 +3,7 @@ use super::function::Function;
 use super::basic_block::BasicBlock;
 use super::opcode::OpCode;
 use super::page_table::PageTable;
+use super::program::{Program, NativeFunction};
 
 #[test]
 fn test_sum() {
@@ -41,7 +42,9 @@ fn test_sum() {
     ]);
 
     let mut executor = Executor::with_page_table(pt.clone());
-    executor.eval_function(&sum_fn);
+    executor.eval_program(&Program::from_functions(vec! [
+        sum_fn
+    ]), 0);
 
     let result = pt.read_u64(0x08000016).unwrap();
     assert_eq!(result, (1 + END) * END / 2);
@@ -74,8 +77,52 @@ fn test_fp() {
     ]);
 
     let mut executor = Executor::with_page_table(pt.clone());
-    executor.eval_function(&test_fn);
+    executor.eval_program(&Program::from_functions(vec! [
+        test_fn
+    ]), 0);
 
     let result = pt.read_f64(0x08000000).unwrap();
     assert!((result - (::std::f64::consts::PI * 2.0 + 1.0 - 3.0) / 0.7).abs() < 1e-12);
+}
+
+#[test]
+fn test_fn_call() {
+    use std::cell::RefCell;
+
+    let result: RefCell<u64> = RefCell::new(0);
+
+    let setter = |executor: &mut Executor| -> () {
+        *result.borrow_mut() = executor.read_global(1);
+    };
+
+    let mut program = Program::from_functions(vec! [
+        Function::from_basic_blocks(vec! [
+            BasicBlock::from_opcodes(vec! [
+                { OpCode::UIConst64(0, 42) },
+                { OpCode::StoreGlobal(1, 0) },
+                { OpCode::UIConst64(0, 99) },
+                { OpCode::StoreGlobal(2, 0) },
+                { OpCode::Call(1) },
+                { OpCode::LoadGlobal(1, 0) },
+                { OpCode::StoreGlobal(1, 1)},
+                { OpCode::CallNative(0) },
+                { OpCode::Return }
+            ])
+        ]),
+        Function::from_basic_blocks(vec! [
+            BasicBlock::from_opcodes(vec! [
+                { OpCode::LoadGlobal(1, 1) },
+                { OpCode::LoadGlobal(2, 2) },
+                { OpCode::UIAdd(1, 2) },
+                { OpCode::StoreGlobal(0, 0) },
+                { OpCode::Return }
+            ])
+        ])
+    ]);
+    program.append_native_function(NativeFunction::new(&setter));
+
+    let mut executor = Executor::new();
+    executor.eval_program(&program, 0);
+
+    assert_eq!(*result.borrow(), 42 + 99);
 }

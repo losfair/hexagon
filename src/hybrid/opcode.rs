@@ -56,5 +56,11 @@ pub enum OpCode {
     Store16(usize, usize),
     Store32(usize, usize),
     Store64(usize, usize),
-    Mov(usize, usize)
+    Mov(usize, usize),
+    LoadGlobal(usize, usize),
+    StoreGlobal(usize, usize),
+    Call(usize),
+    CallIndirect(usize),
+    CallNative(usize),
+    CallNativeIndirect(usize)
 }
