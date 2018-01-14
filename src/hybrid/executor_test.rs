@@ -51,6 +51,32 @@ fn test_sum() {
 }
 
 #[test]
+fn test_int_types() {
+    let mut pt = PageTable::new();
+    pt.virtual_alloc(0x08000000);
+
+    let test_fn = Function::from_basic_blocks(vec! [
+        BasicBlock::from_opcodes(vec! [
+            { OpCode::SIConst64(1, -10) },
+            { OpCode::SIConst64(2, 3) },
+            { OpCode::SIAdd(1, 2) },
+            { OpCode::SIMul(0, 2) },
+            { OpCode::UIConst64(1, 0x08000000) },
+            { OpCode::Store64(0, 1) },
+            { OpCode::Return }
+        ])
+    ]);
+
+    let mut executor = Executor::with_page_table(pt.clone());
+    executor.eval_program(&Program::from_functions(vec! [
+        test_fn
+    ]), 0);
+
+    let result = pt.read_i64(0x08000000);
+    assert_eq!(result, Some((-10 + 3) * 3));
+}
+
+#[test]
 fn test_fp() {
     let mut pt = PageTable::new();
     pt.virtual_alloc(0x08000000);
