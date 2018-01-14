@@ -3,6 +3,7 @@ pub mod executor;
 pub mod function;
 pub mod opcode;
 pub mod page_table;
+pub mod type_cast;
 
 #[cfg(test)]
 mod executor_test;

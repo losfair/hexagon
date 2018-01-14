@@ -1,7 +1,7 @@
 use super::page_table::PageTable;
 use super::function::Function;
 use super::opcode::OpCode;
-use byteorder::{ReadBytesExt, NativeEndian};
+use super::type_cast;
 
 pub struct Executor {
     page_table: PageTable
@@ -86,74 +86,34 @@ impl Executor {
                     local.regs[0] = (local.regs[a] as u64 % local.regs[b] as u64) as u64;
                 },
                 OpCode::FAdd(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
-                    local.regs[0] = unsafe {
-                        ::std::mem::transmute::<f64, u64>(
-                            (&left as &[u8]).read_f64::<NativeEndian>().unwrap() +
-                            (&right as &[u8]).read_f64::<NativeEndian>().unwrap() 
-                        )
-                    };
+                    local.regs[0] = type_cast::f64_to_u64(
+                        type_cast::u64_to_f64(local.regs[a]).unwrap() +
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
+                    );
                 },
                 OpCode::FSub(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
-                    local.regs[0] = unsafe {
-                        ::std::mem::transmute::<f64, u64>(
-                            (&left as &[u8]).read_f64::<NativeEndian>().unwrap() -
-                            (&right as &[u8]).read_f64::<NativeEndian>().unwrap() 
-                        )
-                    };
+                    local.regs[0] = type_cast::f64_to_u64(
+                        type_cast::u64_to_f64(local.regs[a]).unwrap() -
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
+                    );
                 },
                 OpCode::FMul(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
-                    local.regs[0] = unsafe {
-                        ::std::mem::transmute::<f64, u64>(
-                            (&left as &[u8]).read_f64::<NativeEndian>().unwrap() *
-                            (&right as &[u8]).read_f64::<NativeEndian>().unwrap() 
-                        )
-                    };
+                    local.regs[0] = type_cast::f64_to_u64(
+                        type_cast::u64_to_f64(local.regs[a]).unwrap() *
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
+                    );
                 },
                 OpCode::FDiv(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
-                    local.regs[0] = unsafe {
-                        ::std::mem::transmute::<f64, u64>(
-                            (&left as &[u8]).read_f64::<NativeEndian>().unwrap() /
-                            (&right as &[u8]).read_f64::<NativeEndian>().unwrap() 
-                        )
-                    };
+                    local.regs[0] = type_cast::f64_to_u64(
+                        type_cast::u64_to_f64(local.regs[a]).unwrap() /
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
+                    );
                 },
                 OpCode::FMod(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
-                    local.regs[0] = unsafe {
-                        ::std::mem::transmute::<f64, u64>(
-                            (&left as &[u8]).read_f64::<NativeEndian>().unwrap() %
-                            (&right as &[u8]).read_f64::<NativeEndian>().unwrap() 
-                        )
-                    };
+                    local.regs[0] = type_cast::f64_to_u64(
+                        type_cast::u64_to_f64(local.regs[a]).unwrap() %
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
+                    );
                 },
                 OpCode::Shl(a, b) => {
                     local.regs[0] = local.regs[a] << local.regs[b];
@@ -237,15 +197,9 @@ impl Executor {
                     };
                 },
                 OpCode::FLt(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
                     let (left, right) = (
-                        (&left as &[u8]).read_f64::<NativeEndian>().unwrap(),
-                        (&right as &[u8]).read_f64::<NativeEndian>().unwrap()
+                        type_cast::u64_to_f64(local.regs[a]).unwrap(),
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
                     );
                     local.regs[0] = if left < right {
                         1
@@ -254,15 +208,9 @@ impl Executor {
                     };
                 },
                 OpCode::FLe(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
                     let (left, right) = (
-                        (&left as &[u8]).read_f64::<NativeEndian>().unwrap(),
-                        (&right as &[u8]).read_f64::<NativeEndian>().unwrap()
+                        type_cast::u64_to_f64(local.regs[a]).unwrap(),
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
                     );
                     local.regs[0] = if left <= right {
                         1
@@ -271,15 +219,9 @@ impl Executor {
                     };
                 },
                 OpCode::FGe(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
                     let (left, right) = (
-                        (&left as &[u8]).read_f64::<NativeEndian>().unwrap(),
-                        (&right as &[u8]).read_f64::<NativeEndian>().unwrap()
+                        type_cast::u64_to_f64(local.regs[a]).unwrap(),
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
                     );
                     local.regs[0] = if left >= right {
                         1
@@ -288,15 +230,9 @@ impl Executor {
                     };
                 },
                 OpCode::FGt(a, b) => {
-                    let (left, right) = unsafe {
-                        (
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[a]),
-                            ::std::mem::transmute::<u64, [u8; 8]>(local.regs[b])
-                        )
-                    };
                     let (left, right) = (
-                        (&left as &[u8]).read_f64::<NativeEndian>().unwrap(),
-                        (&right as &[u8]).read_f64::<NativeEndian>().unwrap()
+                        type_cast::u64_to_f64(local.regs[a]).unwrap(),
+                        type_cast::u64_to_f64(local.regs[b]).unwrap()
                     );
                     local.regs[0] = if left > right {
                         1
@@ -343,9 +279,7 @@ impl Executor {
                     local.regs[target] = v as u64;
                 },
                 OpCode::FConst64(target, v) => {
-                    local.regs[target] = unsafe {
-                        ::std::mem::transmute::<f64, u64>(v)
-                    };
+                    local.regs[target] = type_cast::f64_to_u64(v);
                 },
                 OpCode::Load8(target, p) => {
                     let addr = local.regs[p];

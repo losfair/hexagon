@@ -46,3 +46,36 @@ fn test_sum() {
     let result = pt.read_u64(0x08000016).unwrap();
     assert_eq!(result, (1 + END) * END / 2);
 }
+
+#[test]
+fn test_fp() {
+    let mut pt = PageTable::new();
+    pt.virtual_alloc(0x08000000);
+
+    let test_fn = Function::from_basic_blocks(vec! [
+        BasicBlock::from_opcodes(vec! [
+            { OpCode::FConst64(1, ::std::f64::consts::PI) },
+            { OpCode::FConst64(2, 2.0) },
+            { OpCode::FMul(1, 2) },
+            { OpCode::Mov(3, 0) },
+            { OpCode::FConst64(0, 1.0) },
+            { OpCode::FAdd(3, 0) },
+            { OpCode::Mov(3, 0) },
+            { OpCode::FConst64(0, 3.0) },
+            { OpCode::FSub(3, 0) },
+            { OpCode::Mov(3, 0) },
+            { OpCode::FConst64(0, 0.7) },
+            { OpCode::FDiv(3, 0) },
+            { OpCode::Mov(3, 0) },
+            { OpCode::UIConst64(0, 0x08000000) },
+            { OpCode::Store64(3, 0)},
+            { OpCode::Return }
+        ])
+    ]);
+
+    let mut executor = Executor::with_page_table(pt.clone());
+    executor.eval_function(&test_fn);
+
+    let result = pt.read_f64(0x08000000).unwrap();
+    assert!((result - (::std::f64::consts::PI * 2.0 + 1.0 - 3.0) / 0.7).abs() < 1e-12);
+}
