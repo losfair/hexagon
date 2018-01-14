@@ -7,7 +7,13 @@ pub mod program;
 pub mod type_cast;
 
 #[cfg(test)]
+mod executor_bench;
+
+#[cfg(test)]
 mod executor_test;
+
+#[cfg(test)]
+mod page_table_bench;
 
 #[cfg(test)]
 mod page_table_test;

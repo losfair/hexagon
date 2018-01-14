@@ -1,5 +1,8 @@
 #![feature(nll)]
 
+#![feature(test)]
+extern crate test;
+
 extern crate smallvec;
 extern crate byteorder;
 extern crate bincode;
