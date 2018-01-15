@@ -2,6 +2,7 @@ use std::cell::UnsafeCell;
 use std::collections::HashSet;
 use smallvec::SmallVec;
 use errors;
+use value::Value;
 
 pub struct CallStack {
     frames: Vec<Frame>,
@@ -12,10 +13,10 @@ pub struct CallStack {
 // [unsafe]
 // These fields are guaranteed to be accessed properly (as an implementation detail).
 pub struct Frame {
-    this: usize,
-    arguments: UnsafeCell<SmallVec<[usize; 4]>>,
-    locals: UnsafeCell<SmallVec<[usize; 16]>>,
-    exec_stack: UnsafeCell<SmallVec<[usize; 16]>>
+    this: Value,
+    arguments: UnsafeCell<SmallVec<[Value; 4]>>,
+    locals: UnsafeCell<SmallVec<[Value; 16]>>,
+    exec_stack: UnsafeCell<SmallVec<[Value; 16]>>
 }
 
 impl CallStack {
@@ -50,15 +51,23 @@ impl CallStack {
     pub fn collect_objects(&self) -> Vec<usize> {
         let mut objs = HashSet::new();
         for frame in &self.frames {
-            objs.insert(frame.this);
+            if let Value::Object(id) = frame.this {
+                objs.insert(id);
+            }
             for v in unsafe { &*frame.arguments.get() }.iter() {
-                objs.insert(*v);
+                if let Value::Object(id) = *v {
+                    objs.insert(id);
+                }
             }
             for v in unsafe { &*frame.locals.get() }.iter() {
-                objs.insert(*v);
+                if let Value::Object(id) = *v {
+                    objs.insert(id);
+                }
             }
             for v in unsafe { &*frame.exec_stack.get() }.iter() {
-                objs.insert(*v);
+                if let Value::Object(id) = *v {
+                    objs.insert(id);
+                }
             }
         }
         objs.into_iter().collect()
@@ -66,7 +75,7 @@ impl CallStack {
 }
 
 impl Frame {
-    pub fn with_arguments(this: usize, args: &[usize]) -> Frame {
+    pub fn with_arguments(this: Value, args: &[Value]) -> Frame {
         Frame {
             this: this,
             arguments: UnsafeCell::new(args.into()),
@@ -75,11 +84,11 @@ impl Frame {
         }
     }
 
-    pub fn push_exec(&self, id: usize) {
-        unsafe { &mut *self.exec_stack.get() }.push(id);
+    pub fn push_exec(&self, obj: Value) {
+        unsafe { &mut *self.exec_stack.get() }.push(obj);
     }
 
-    pub fn pop_exec(&self) -> usize {
+    pub fn pop_exec(&self) -> Value {
         match unsafe { &mut *self.exec_stack.get() }.pop() {
             Some(v) => v,
             None => panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")))
@@ -92,7 +101,7 @@ impl Frame {
             panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")));
         }
 
-        let last = stack[stack.len() - 1];
+        let last = stack[stack.len() - 1].clone();
         stack.push(last);
     }
 
@@ -100,11 +109,11 @@ impl Frame {
         let locals = unsafe { &mut *self.locals.get() };
         locals.clear();
         for _ in 0..n_slots {
-            locals.push(0);
+            locals.push(Value::Null);
         }
     }
 
-    pub fn get_local(&self, ind: usize) -> usize {
+    pub fn get_local(&self, ind: usize) -> Value {
         let locals = unsafe { &*self.locals.get() };
         if ind >= locals.len() {
             panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
@@ -113,16 +122,16 @@ impl Frame {
         (*locals)[ind]
     }
 
-    pub fn set_local(&self, ind: usize, obj_id: usize) {
+    pub fn set_local(&self, ind: usize, obj: Value) {
         let locals = unsafe { &mut *self.locals.get() };
         if ind >= locals.len() {
             panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
         }
 
-        (*locals)[ind] = obj_id;
+        (*locals)[ind] = obj;
     }
 
-    pub fn get_argument(&self, id: usize) -> Option<usize> {
+    pub fn get_argument(&self, id: usize) -> Option<Value> {
         let args = unsafe { &*self.arguments.get() };
         if id < args.len() {
             Some(args[id])
@@ -131,7 +140,7 @@ impl Frame {
         }
     }
 
-    pub fn must_get_argument(&self, id: usize) -> usize {
+    pub fn must_get_argument(&self, id: usize) -> Value {
         self.get_argument(id).unwrap_or_else(|| {
             panic!(errors::VMError::from(errors::RuntimeError::new("Argument index out of bound")))
         })
@@ -141,7 +150,7 @@ impl Frame {
         unsafe { &*self.arguments.get() }.len()
     }
 
-    pub fn get_this(&self) -> usize {
+    pub fn get_this(&self) -> Value {
         self.this
     }
 }

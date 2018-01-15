@@ -2,8 +2,7 @@ use executor::Executor;
 use opcode::OpCode;
 use basic_block::BasicBlock;
 use function::Function;
-use object::Object;
-use primitive::Int;
+use value::ValueContext;
 
 #[test]
 fn test_executor() {
@@ -76,8 +75,11 @@ fn test_executor() {
 
     handle.gc();
 
-    let output_slot = handle.get_static_object_ref("output").unwrap();
-    let result = output_slot.as_any().downcast_ref::<Int>().unwrap().to_i64();
+    let result_value = handle.get_static_object("output").unwrap();
+    let result = ValueContext::new(
+        &result_value,
+        handle.get_object_pool()
+    ).to_i64();
 
     assert_eq!(result, (1 + END) * END / 2);
 }

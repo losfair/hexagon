@@ -5,6 +5,7 @@ use basic_block::BasicBlock;
 use executor::ExecutorImpl;
 use errors;
 use function_optimizer::FunctionOptimizer;
+use value::Value;
 
 pub enum Function {
     Virtual(VirtualFunction),
@@ -17,7 +18,7 @@ pub struct VirtualFunction {
     should_optimize: bool
 }
 
-pub type NativeFunction = Box<Fn(&mut ExecutorImpl) -> usize>;
+pub type NativeFunction = Box<Fn(&mut ExecutorImpl) -> Value>;
 
 impl Object for Function {
     fn initialize(&mut self, pool: &mut ObjectPool) {
@@ -43,7 +44,7 @@ impl Object for Function {
         self as &mut Any
     }
 
-    fn call(&self, executor: &mut ExecutorImpl) -> usize {
+    fn call(&self, executor: &mut ExecutorImpl) -> Value {
         match *self {
             Function::Virtual(ref vf) => {
                 executor.eval_basic_blocks(vf.basic_blocks.as_slice(), 0)

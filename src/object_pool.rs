@@ -1,6 +1,5 @@
 use object::Object;
 use object_info::{ObjectInfo, ObjectHandle, TypedObjectHandle};
-use primitive;
 use static_root::StaticRoot;
 use call_stack::CallStack;
 use errors;
@@ -47,14 +46,6 @@ impl ObjectPool {
 
         objects[id] = None;
         pool.push(id);
-    }
-
-    pub fn allocate_null(&mut self) -> usize {
-        self.allocate(Box::new(primitive::Null::new()))
-    }
-
-    pub fn allocate_bool(&mut self, value: bool) -> usize {
-        self.allocate(Box::new(primitive::Bool::new(value)))
     }
 
     pub fn get<'a>(&self, id: usize) -> ObjectHandle<'a> {

@@ -7,6 +7,7 @@ use object::Object;
 use object_pool::ObjectPool;
 use function::Function;
 use executor::ExecutorImpl;
+use value::{Value, ValueContext};
 
 pub struct PageTableObject {
     pt: Rc<RefCell<PageTable>>,
@@ -17,7 +18,7 @@ struct PageTableRuntimeInfo {
     virtual_alloc_fn: usize
 }
 
-fn create_fn<T: Fn(&mut ExecutorImpl) -> usize + 'static>(pool: &mut ObjectPool, f: T) -> usize {
+fn create_fn<T: Fn(&mut ExecutorImpl) -> Value + 'static>(pool: &mut ObjectPool, f: T) -> usize {
     pool.allocate(Box::new(Function::from_native(Box::new(f))))
 }
 
@@ -30,14 +31,17 @@ impl Object for PageTableObject {
                     let addr_p = exec.get_current_frame().must_get_argument(0);
                     let pool = exec.get_object_pool_mut();
 
-                    let base = pool.get_direct(addr_p);
-                    let ok = pt.borrow_mut().virtual_alloc(base.to_i64() as u64);
+                    let base = ValueContext::new(
+                        &addr_p,
+                        pool
+                    ).to_i64();
+                    let ok = pt.borrow_mut().virtual_alloc(base as u64);
 
                     if !ok {
                         panic!(errors::VMError::from(errors::RuntimeError::new("Virtual allocation failed")));
                     }
 
-                    exec.get_object_pool_mut().allocate_null()
+                    Value::Null
                 }
             })
         });

@@ -4,14 +4,14 @@ use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::cmp::Ordering;
 use object::Object;
 use call_stack::{CallStack, Frame};
-use opcode::{OpCode, RtOpCode};
+use opcode::OpCode;
 use errors;
 use primitive;
 use basic_block::BasicBlock;
-use object_info::{ObjectHandle};
 use object_pool::ObjectPool;
 use smallvec::SmallVec;
 use hybrid::executor::Executor as HybridExecutor;
+use value::{Value, ValueContext};
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -35,14 +35,14 @@ impl Executor {
 
 pub struct ExecutorImpl {
     stack: CallStack,
-    static_objects: HashMap<String, usize>,
+    static_objects: HashMap<String, Value>,
     hybrid_executor: HybridExecutor,
 
     object_pool: ObjectPool
 }
 
 enum EvalControlMessage {
-    Return(usize),
+    Return(Value),
     Redirect(usize)
 }
 
@@ -80,7 +80,7 @@ impl ExecutorImpl {
         &mut self.hybrid_executor
     }
 
-    fn invoke(&mut self, callable_obj_id: usize, this: usize, args: &[usize]) {
+    fn invoke(&mut self, callable_val: Value, this: Value, args: &[Value]) {
         let frame = Frame::with_arguments(this, args);
 
         // Push the callable object onto the execution stack
@@ -89,7 +89,12 @@ impl ExecutorImpl {
         // No extra care needs to be taken for arguments
         // bacause they are already on the new frame.
 
-        self.get_current_frame().push_exec(callable_obj_id);
+        let callable_obj_id = match callable_val {
+            Value::Object(id) => id,
+            _ => panic!(errors::VMError::from(errors::RuntimeError::new("Not callable")))
+        };
+
+        self.get_current_frame().push_exec(callable_val);
 
         let callable_obj = self.object_pool.get(callable_obj_id);
 
@@ -107,7 +112,7 @@ impl ExecutorImpl {
         }
     }
 
-    fn set_static_object<K: ToString>(&mut self, key: K, obj_id: usize) {
+    fn set_static_object<K: ToString>(&mut self, key: K, obj: Value) {
         let key = key.to_string();
 
         // Replacing static objects is denied to ensure
@@ -116,22 +121,20 @@ impl ExecutorImpl {
             panic!(errors::VMError::from(errors::RuntimeError::new("A static object with the same key already exists")));
         }
 
-        self.object_pool.get_static_root().append_child(obj_id);
-        self.static_objects.insert(key, obj_id);
+        if let Value::Object(id) = obj {
+            self.object_pool.get_static_root().append_child(id);
+        }
+        self.static_objects.insert(key, obj);
     }
 
     pub fn create_static_object<K: ToString>(&mut self, key: K, obj: Box<Object>) {
         let obj_id = self.object_pool.allocate(obj);
-        self.set_static_object(key, obj_id);
+        self.set_static_object(key, Value::Object(obj_id));
     }
 
-    pub fn get_static_object<K: AsRef<str>>(&self, key: K) -> Option<usize> {
+    pub fn get_static_object<K: AsRef<str>>(&self, key: K) -> Option<Value> {
         let key = key.as_ref();
         self.static_objects.get(key).map(|v| *v)
-    }
-
-    pub fn get_static_object_ref<'a, K: AsRef<str>>(&self, key: K) -> Option<ObjectHandle<'a>> {
-        self.get_static_object(key).map(|id| self.object_pool.get(id))
     }
 
     fn eval_basic_blocks_impl(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> EvalControlMessage {
@@ -147,24 +150,20 @@ impl ExecutorImpl {
         for op in &basic_blocks[basic_block_id].opcodes {
             match *op {
                 OpCode::LoadNull => {
-                    let obj = self.object_pool.allocate(Box::new(primitive::Null::new()));
-                    self.get_current_frame().push_exec(obj);
+                    self.get_current_frame().push_exec(Value::Null);
                 },
                 OpCode::LoadInt(value) => {
-                    let obj = self.object_pool.allocate(Box::new(primitive::Int::new(value)));
-                    self.get_current_frame().push_exec(obj);
+                    self.get_current_frame().push_exec(Value::Int(value));
                 },
                 OpCode::LoadFloat(value) => {
-                    let obj = self.object_pool.allocate(Box::new(primitive::Float::new(value)));
-                    self.get_current_frame().push_exec(obj);
+                    self.get_current_frame().push_exec(Value::Float(value));
                 },
                 OpCode::LoadBool(value) => {
-                    let obj = self.object_pool.allocate(Box::new(primitive::Bool::new(value)));
-                    self.get_current_frame().push_exec(obj);
+                    self.get_current_frame().push_exec(Value::Bool(value));
                 },
                 OpCode::LoadString(ref value) => {
                     let obj = self.object_pool.allocate(Box::new(primitive::StringObject::new(value)));
-                    self.get_current_frame().push_exec(obj);
+                    self.get_current_frame().push_exec(Value::Object(obj));
                 },
                 OpCode::LoadThis => {
                     let frame = self.get_current_frame();
@@ -177,7 +176,7 @@ impl ExecutorImpl {
                         let target = frame.pop_exec();
                         let this = frame.pop_exec();
 
-                        let args: SmallVec<[usize; 4]> = (0..n_args)
+                        let args: SmallVec<[Value; 4]> = (0..n_args)
                             .map(|_| frame.pop_exec())
                             .collect();
 
@@ -206,43 +205,53 @@ impl ExecutorImpl {
                     frame.set_local(ind, obj_id);
                 },
                 OpCode::GetStatic => {
-                    let key_obj_id = self.get_current_frame().pop_exec();
-                    let key = self.object_pool.get_direct(key_obj_id).to_str();
+                    let key_val = self.get_current_frame().pop_exec();
+                    let key = ValueContext::new(
+                        &key_val,
+                        self.get_object_pool()
+                    ).as_object_direct().to_str();
                     let maybe_target_obj = self.static_objects.get(key).map(|v| *v);
 
                     if let Some(target_obj) = maybe_target_obj {
                         self.get_current_frame().push_exec(target_obj);
                     } else {
-                        let null_obj_id = self.object_pool.allocate(Box::new(primitive::Null::new()));
-                        self.get_current_frame().push_exec(null_obj_id);
+                        self.get_current_frame().push_exec(Value::Null);
                     }
                 },
                 OpCode::SetStatic => {
-                    let key_obj_id = self.get_current_frame().pop_exec();
-                    let key = self.object_pool.get_direct(key_obj_id).to_string();
+                    let key_val = self.get_current_frame().pop_exec();
+                    let key = ValueContext::new(
+                        &key_val,
+                        self.get_object_pool()
+                    ).as_object_direct().to_string();
 
-                    let obj_id = self.get_current_frame().pop_exec();
+                    let value = self.get_current_frame().pop_exec();
 
-                    self.set_static_object(key, obj_id);
+                    self.set_static_object(key, value);
                 },
                 OpCode::GetField => {
                     // TODO: Implement prototype-based subtyping
 
-                    let target_obj_id = self.get_current_frame().pop_exec();
-                    let key_obj_id = self.get_current_frame().pop_exec();
+                    let target_obj_val = self.get_current_frame().pop_exec();
+                    let target_obj = ValueContext::new(
+                        &target_obj_val,
+                        self.get_object_pool()
+                    ).as_object_direct();
 
-                    let target_obj = self.object_pool.get_direct(target_obj_id);
-                    let key = self.object_pool.get_direct(key_obj_id).to_str();
+                    let key_val = self.get_current_frame().pop_exec();
+                    let key = ValueContext::new(
+                        &key_val,
+                        self.get_object_pool()
+                    ).as_object_direct().to_str();
 
                     if let Some(v) = target_obj.get_field(key) {
                         self.get_current_frame().push_exec(v);
                     } else {
-                        let null_obj = self.object_pool.allocate(Box::new(primitive::Null::new()));
-                        self.get_current_frame().push_exec(null_obj);
+                        self.get_current_frame().push_exec(Value::Null);
                     }
                 },
                 OpCode::SetField => {
-                    let (target_obj_id, key_obj_id, value_obj_id) = {
+                    let (target_obj_val, key_val, value) = {
                         let frame = self.get_current_frame();
                         (
                             frame.pop_exec(),
@@ -251,10 +260,17 @@ impl ExecutorImpl {
                         )
                     };
 
-                    let target_obj = self.object_pool.get_direct(target_obj_id);
-                    let key = self.object_pool.get_direct(key_obj_id).to_str();
+                    let target_obj = ValueContext::new(
+                        &target_obj_val,
+                        self.get_object_pool()
+                    ).as_object_direct();
 
-                    target_obj.set_field(key, value_obj_id);
+                    let key = ValueContext::new(
+                        &key_val,
+                        self.get_object_pool()
+                    ).as_object_direct().to_str();
+
+                    target_obj.set_field(key, value);
                 },
                 OpCode::Branch(target_id) => {
                     return EvalControlMessage::Redirect(target_id);
@@ -262,10 +278,10 @@ impl ExecutorImpl {
                 OpCode::ConditionalBranch(if_true, if_false) => {
                     let condition_is_true = {
                         let frame = self.get_current_frame();
-                        let condition_obj_id = frame.pop_exec();
-                        let condition_obj = self.object_pool.get_direct(condition_obj_id);
-
-                        condition_obj.to_bool()
+                        ValueContext::new(
+                            &frame.pop_exec(),
+                            self.get_object_pool()
+                        ).to_bool()
                     };
 
                     return EvalControlMessage::Redirect(if condition_is_true {
@@ -283,235 +299,235 @@ impl ExecutorImpl {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Int::new(left + right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Int(left + right));
                 },
                 OpCode::IntSub => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Int::new(left - right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Int(left - right));
                 },
                 OpCode::IntMul => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Int::new(left * right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Int(left * right));
                 },
                 OpCode::IntDiv => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Int::new(left / right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Int(left / right));
                 },
                 OpCode::IntMod => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Int::new(left % right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Int(left % right));
                 },
                 OpCode::IntPow => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Int::new(left.pow(right as u32))));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Int(left.pow(right as u32)));
                 },
                 OpCode::FloatAdd => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Float::new(left + right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Float(left + right));
                 },
                 OpCode::FloatSub => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Float::new(left - right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Float(left - right));
                 },
                 OpCode::FloatMul => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Float::new(left * right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Float(left * right));
                 },
                 OpCode::FloatDiv => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Float::new(left / right)));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Float(left / right));
                 },
                 OpCode::FloatPowi => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Int>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Float::new(left.powi(right as i32))));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Float(left.powi(right as i32)));
                 },
                 OpCode::FloatPowf => {
                     let (left, right) = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
                         (
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(left).value,
-                            self.object_pool.must_get_direct_typed::<primitive::Float>(right).value
+                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
                         )
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Float::new(left.powf(right))));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Float(left.powf(right)));
                 },
                 OpCode::CastToFloat => {
-                    let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get_direct(value).to_f64();
-
-                    let result = self.object_pool.allocate(Box::new(primitive::Float::new(value)));
-                    self.get_current_frame().push_exec(result);
+                    let value = ValueContext::new(
+                        &self.get_current_frame().pop_exec(),
+                        self.get_object_pool()
+                    ).to_f64();
+                    self.get_current_frame().push_exec(Value::Float(value));
                 },
                 OpCode::CastToInt => {
-                    let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get_direct(value).to_i64();
-
-                    let result = self.object_pool.allocate(Box::new(primitive::Int::new(value)));
-                    self.get_current_frame().push_exec(result);
+                    let value = ValueContext::new(
+                        &self.get_current_frame().pop_exec(),
+                        self.get_object_pool()
+                    ).to_i64();
+                    self.get_current_frame().push_exec(Value::Int(value));
                 },
                 OpCode::CastToBool => {
-                    let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get_direct(value).to_bool();
-
-                    let result = self.object_pool.allocate(Box::new(primitive::Bool::new(value)));
-                    self.get_current_frame().push_exec(result);
+                    let value = ValueContext::new(
+                        &self.get_current_frame().pop_exec(),
+                        self.get_object_pool()
+                    ).to_bool();
+                    self.get_current_frame().push_exec(Value::Bool(value));
                 },
                 OpCode::Not => {
-                    let value = self.get_current_frame().pop_exec();
-                    let value = self.object_pool.get_direct(value).to_bool();
-
-                    let result = self.object_pool.allocate(Box::new(primitive::Bool::new(!value)));
-                    self.get_current_frame().push_exec(result);
+                    let value = ValueContext::new(
+                        &self.get_current_frame().pop_exec(),
+                        self.get_object_pool()
+                    ).to_bool();
+                    self.get_current_frame().push_exec(Value::Bool(!value));
                 },
                 OpCode::TestLt => {
                     let ord = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        self.object_pool.get_direct(left).compare(self.object_pool.get_direct(right))
+
+                        let left_ctx = ValueContext::new(
+                            &left,
+                            self.get_object_pool()
+                        );
+                        let right_ctx = ValueContext::new(
+                            &right,
+                            self.get_object_pool()
+                        );
+                        left_ctx.compare(&right_ctx)
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Bool::new(
-                        ord == Some(Ordering::Less)
-                    )));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Less)));
                 },
                 OpCode::TestEq => {
-                    let ok = {
+                    let ord = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        self.object_pool.get_direct(left).test_eq(self.object_pool.get_direct(right))
+
+                        let left_ctx = ValueContext::new(
+                            &left,
+                            self.get_object_pool()
+                        );
+                        let right_ctx = ValueContext::new(
+                            &right,
+                            self.get_object_pool()
+                        );
+                        left_ctx.compare(&right_ctx)
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Bool::new(
-                        ok
-                    )));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Equal)));
                 },
                 OpCode::TestGt => {
                     let ord = {
                         let frame = self.get_current_frame();
                         let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        self.object_pool.get_direct(left).compare(self.object_pool.get_direct(right))
+
+                        let left_ctx = ValueContext::new(
+                            &left,
+                            self.get_object_pool()
+                        );
+                        let right_ctx = ValueContext::new(
+                            &right,
+                            self.get_object_pool()
+                        );
+                        left_ctx.compare(&right_ctx)
                     };
 
-                    let result = self.object_pool.allocate(Box::new(primitive::Bool::new(
-                        ord == Some(Ordering::Greater)
-                    )));
-                    self.get_current_frame().push_exec(result);
+                    self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Greater)));
                 },
-                OpCode::Rt(ref op) => {
-                    match *op {
-                        RtOpCode::LoadObject(id) => {
-                            self.get_current_frame().push_exec(id);
-                        }
-                    }
-                }
+                _ => panic!("Not implemented")
             }
         }
 
         panic!(errors::VMError::from(errors::RuntimeError::new("Leaving a basic block without terminator")));
     }
 
-    pub(crate) fn eval_basic_blocks(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> usize {
+    pub(crate) fn eval_basic_blocks(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> Value {
         let mut current_id = basic_block_id;
 
         loop {
@@ -536,7 +552,7 @@ impl ExecutorImpl {
             panic!(errors::VMError::from(errors::RuntimeError::new("Static object not found")));
         });
 
-        let new_this = self.object_pool.allocate(Box::new(primitive::Null::new()));
+        let new_this = Value::Null;
 
         let frame = Frame::with_arguments(
             new_this,

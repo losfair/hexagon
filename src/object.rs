@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use errors;
 use executor::{ExecutorImpl};
 use object_pool::ObjectPool;
+use value::{Value, ValueContext};
 
 pub trait Object {
     fn finalize(&self, _pool: &mut ObjectPool) {}
@@ -10,25 +11,25 @@ pub trait Object {
     // before allocating on the object pool...
     fn initialize(&mut self, _pool: &mut ObjectPool) {}
 
-    fn call(&self, _executor: &mut ExecutorImpl) -> usize {
+    fn call(&self, _executor: &mut ExecutorImpl) -> Value {
         panic!(errors::VMError::from(errors::RuntimeError::new("Not callable")));
     }
-    fn get_field(&self, _name: &str) -> Option<usize> {
+    fn get_field(&self, _name: &str) -> Option<Value> {
         None
     }
-    fn set_field(&self, _name: &str, _value_ref: usize) {
+    fn set_field(&self, _name: &str, _value_ref: Value) {
         panic!(errors::VMError::from(errors::RuntimeError::new("Cannot set field")));
     }
-    fn must_get_field(&self, name: &str) -> usize {
+    fn must_get_field(&self, name: &str) -> Value {
         match self.get_field(name) {
             Some(v) => v,
             None => panic!(errors::VMError::from(errors::FieldNotFoundError::from_field_name(name)))
         }
     }
-    fn compare(&self, _other: &Object) -> Option<Ordering> {
+    fn compare(&self, _other: &ValueContext) -> Option<Ordering> {
         None
     }
-    fn test_eq(&self, _other: &Object) -> bool {
+    fn test_eq(&self, _other: &ValueContext) -> bool {
         false
     }
     fn typename(&self) -> &str {
