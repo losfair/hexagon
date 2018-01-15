@@ -132,7 +132,9 @@ impl Frame {
     }
 
     pub fn must_get_argument(&self, id: usize) -> usize {
-        self.get_argument(id).unwrap_or_else(|| panic!("Argument index out of bound"))
+        self.get_argument(id).unwrap_or_else(|| {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Argument index out of bound")))
+        })
     }
 
     pub fn get_n_arguments(&self) -> usize {

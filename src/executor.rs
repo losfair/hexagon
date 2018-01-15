@@ -11,6 +11,7 @@ use basic_block::BasicBlock;
 use object_info::{ObjectHandle};
 use object_pool::ObjectPool;
 use smallvec::SmallVec;
+use hybrid::executor::Executor as HybridExecutor;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -35,6 +36,7 @@ impl Executor {
 pub struct ExecutorImpl {
     stack: CallStack,
     static_objects: HashMap<String, usize>,
+    hybrid_executor: HybridExecutor,
 
     object_pool: ObjectPool
 }
@@ -49,6 +51,7 @@ impl ExecutorImpl {
         ExecutorImpl {
             stack: CallStack::new(),
             static_objects: HashMap::new(),
+            hybrid_executor: HybridExecutor::new(),
             object_pool: ObjectPool::new()
         }
     }
@@ -67,6 +70,14 @@ impl ExecutorImpl {
 
     pub fn set_stack_limit(&mut self, limit: usize) {
         self.stack.set_limit(limit);
+    }
+
+    pub fn get_hybrid_executor(&self) -> &HybridExecutor {
+        &self.hybrid_executor
+    }
+
+    pub fn get_hybrid_executor_mut(&mut self) -> &mut HybridExecutor {
+        &mut self.hybrid_executor
     }
 
     fn invoke(&mut self, callable_obj_id: usize, this: usize, args: &[usize]) {

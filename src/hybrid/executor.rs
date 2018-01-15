@@ -44,6 +44,10 @@ impl Executor {
         &self.page_table
     }
 
+    pub fn set_page_table(&mut self, pt: PageTable) {
+        self.page_table = pt;
+    }
+
     pub fn read_global(&self, id: usize) -> u64 {
         self.globals[id]
     }
