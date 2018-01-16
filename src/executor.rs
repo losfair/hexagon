@@ -12,6 +12,7 @@ use object_pool::ObjectPool;
 use smallvec::SmallVec;
 use hybrid::executor::Executor as HybridExecutor;
 use value::{Value, ValueContext};
+use dynamic_object::DynamicObject;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -204,6 +205,14 @@ impl ExecutorImpl {
                     let obj_id = frame.pop_exec();
                     frame.set_local(ind, obj_id);
                 },
+                OpCode::GetArgument(ind) => {
+                    let frame = self.get_current_frame();
+                    frame.push_exec(frame.must_get_argument(ind));
+                },
+                OpCode::GetNArguments => {
+                    let frame = self.get_current_frame();
+                    frame.push_exec(Value::Int(frame.get_n_arguments() as i64));
+                },
                 OpCode::GetStatic => {
                     let key_val = self.get_current_frame().pop_exec();
                     let key = ValueContext::new(
@@ -269,6 +278,17 @@ impl ExecutorImpl {
                     ).as_object_direct().to_str();
 
                     target_obj.set_field(key, value);
+                },
+                OpCode::CreateObject => {
+                    let prototype = match self.get_current_frame().pop_exec() {
+                        Value::Object(id) => Some(id),
+                        Value::Null => None,
+                        _ => panic!(errors::VMError::from(errors::RuntimeError::new("Invalid prototype object")))
+                    };
+                    let obj = self.get_object_pool_mut().allocate(
+                        Box::new(DynamicObject::new(prototype))
+                    );
+                    self.get_current_frame().push_exec(Value::Object(obj));
                 },
                 OpCode::Branch(target_id) => {
                     return EvalControlMessage::Redirect(target_id);

@@ -11,10 +11,13 @@ pub enum OpCode {
     InitLocal(usize),
     GetLocal(usize),
     SetLocal(usize),
+    GetArgument(usize),
+    GetNArguments,
     GetStatic,
     SetStatic,
     GetField,
     SetField,
+    CreateObject,
     Call(usize),
     Branch(usize),
     ConditionalBranch(usize, usize),
@@ -65,10 +68,13 @@ impl OpCode {
             InitLocal(_) => (0, 0),
             GetLocal(_) => (0, 1), // pushes object
             SetLocal(_) => (1, 0), // pops object
+            GetArgument(_) => (0, 1), // pushes the argument
+            GetNArguments => (0, 1), // pushes n_arguments
             GetStatic => (1, 1), // pops name, pushes object
             SetStatic => (2, 0), // pops name & object
             GetField => (2, 1), // pops target object & key, pushes object
             SetField => (3, 0), // pops target object & key & value
+            CreateObject => (1, 1), // pops the prototype object, pushes the created object
             Branch(_) => (0, 0),
             ConditionalBranch(_, _) => (1, 0), // pops condition
             Return => (1, 0), // pops retval,
