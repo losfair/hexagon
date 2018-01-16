@@ -38,7 +38,10 @@ pub enum OpCode {
     CastToString,
     Not,
     TestLt,
+    TestLe,
     TestEq,
+    TestNe,
+    TestGe,
     TestGt,
 
     #[serde(skip_serializing, skip_deserializing)]
@@ -75,7 +78,7 @@ impl OpCode {
                 | StringAdd => (2, 1), // pops the two operands, pushes the result
             CastToFloat | CastToInt | CastToBool | CastToString => (1, 1),
             Not => (1, 1),
-            TestLt | TestEq | TestGt => (2, 1), // pops the two operands, pushes the result
+            TestLt | TestLe | TestEq | TestNe | TestGe | TestGt => (2, 1), // pops the two operands, pushes the result
             Call(n_args) => (n_args + 2, 1), // pops target & this & arguments, pushes the result
             Rt(_) => panic!("Unexpected runtime opcode")
         }

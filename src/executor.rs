@@ -512,6 +512,26 @@ impl ExecutorImpl {
 
                     self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Less)));
                 },
+                OpCode::TestLe => {
+                    let ord = {
+                        let frame = self.get_current_frame();
+                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+                        let left_ctx = ValueContext::new(
+                            &left,
+                            self.get_object_pool()
+                        );
+                        let right_ctx = ValueContext::new(
+                            &right,
+                            self.get_object_pool()
+                        );
+                        left_ctx.compare(&right_ctx)
+                    };
+
+                    self.get_current_frame().push_exec(Value::Bool(
+                        ord == Some(Ordering::Less) || ord == Some(Ordering::Equal)
+                    ));
+                },
                 OpCode::TestEq => {
                     let ord = {
                         let frame = self.get_current_frame();
@@ -529,6 +549,44 @@ impl ExecutorImpl {
                     };
 
                     self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Equal)));
+                },
+                OpCode::TestNe => {
+                    let ord = {
+                        let frame = self.get_current_frame();
+                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+                        let left_ctx = ValueContext::new(
+                            &left,
+                            self.get_object_pool()
+                        );
+                        let right_ctx = ValueContext::new(
+                            &right,
+                            self.get_object_pool()
+                        );
+                        left_ctx.compare(&right_ctx)
+                    };
+
+                    self.get_current_frame().push_exec(Value::Bool(ord != Some(Ordering::Equal)));
+                },
+                OpCode::TestGe => {
+                    let ord = {
+                        let frame = self.get_current_frame();
+                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+                        let left_ctx = ValueContext::new(
+                            &left,
+                            self.get_object_pool()
+                        );
+                        let right_ctx = ValueContext::new(
+                            &right,
+                            self.get_object_pool()
+                        );
+                        left_ctx.compare(&right_ctx)
+                    };
+
+                    self.get_current_frame().push_exec(Value::Bool(
+                        ord == Some(Ordering::Greater) || ord == Some(Ordering::Equal)
+                    ));
                 },
                 OpCode::TestGt => {
                     let ord = {
