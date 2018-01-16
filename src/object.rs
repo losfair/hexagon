@@ -14,14 +14,14 @@ pub trait Object {
     fn call(&self, _executor: &mut ExecutorImpl) -> Value {
         panic!(errors::VMError::from(errors::RuntimeError::new("Not callable")));
     }
-    fn get_field(&self, _name: &str) -> Option<Value> {
+    fn get_field(&self, _pool: &ObjectPool, _name: &str) -> Option<Value> {
         None
     }
     fn set_field(&self, _name: &str, _value_ref: Value) {
         panic!(errors::VMError::from(errors::RuntimeError::new("Cannot set field")));
     }
-    fn must_get_field(&self, name: &str) -> Value {
-        match self.get_field(name) {
+    fn must_get_field(&self, pool: &ObjectPool, name: &str) -> Value {
+        match self.get_field(pool, name) {
             Some(v) => v,
             None => panic!(errors::VMError::from(errors::FieldNotFoundError::from_field_name(name)))
         }

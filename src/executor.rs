@@ -230,8 +230,6 @@ impl ExecutorImpl {
                     self.set_static_object(key, value);
                 },
                 OpCode::GetField => {
-                    // TODO: Implement prototype-based subtyping
-
                     let target_obj_val = self.get_current_frame().pop_exec();
                     let target_obj = ValueContext::new(
                         &target_obj_val,
@@ -244,7 +242,7 @@ impl ExecutorImpl {
                         self.get_object_pool()
                     ).as_object_direct().to_str();
 
-                    if let Some(v) = target_obj.get_field(key) {
+                    if let Some(v) = target_obj.get_field(self.get_object_pool(), key) {
                         self.get_current_frame().push_exec(v);
                     } else {
                         self.get_current_frame().push_exec(Value::Null);

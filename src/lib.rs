@@ -15,6 +15,8 @@ pub mod hybrid;
 
 pub mod basic_block;
 pub mod call_stack;
+pub mod dynamic_object;
+pub mod dynamic_trait;
 pub mod errors;
 pub mod executor;
 pub mod function_optimizer;
