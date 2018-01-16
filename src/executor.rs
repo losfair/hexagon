@@ -438,6 +438,24 @@ impl ExecutorImpl {
 
                     self.get_current_frame().push_exec(Value::Float(left.powf(right)));
                 },
+                OpCode::StringAdd => {
+                    let new_value = {
+                        let frame = self.get_current_frame();
+                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
+                        let (left, right) = (
+                            ValueContext::new(&left, self.get_object_pool()),
+                            ValueContext::new(&right, self.get_object_pool())
+                        );
+                        format!("{}{}", left.to_str(), right.to_str())
+                    };
+                    let new_value = self.get_object_pool_mut().allocate(
+                        Box::new(primitive::StringObject::new(new_value))
+                    );
+
+                    self.get_current_frame().push_exec(Value::Object(
+                        new_value
+                    ));
+                },
                 OpCode::CastToFloat => {
                     let value = ValueContext::new(
                         &self.get_current_frame().pop_exec(),
@@ -458,6 +476,16 @@ impl ExecutorImpl {
                         self.get_object_pool()
                     ).to_bool();
                     self.get_current_frame().push_exec(Value::Bool(value));
+                },
+                OpCode::CastToString => {
+                    let value = ValueContext::new(
+                        &self.get_current_frame().pop_exec(),
+                        self.get_object_pool()
+                    ).to_str().to_string();
+                    let value = self.get_object_pool_mut().allocate(
+                        Box::new(primitive::StringObject::new(value))
+                    );
+                    self.get_current_frame().push_exec(Value::Object(value));
                 },
                 OpCode::Not => {
                     let value = ValueContext::new(

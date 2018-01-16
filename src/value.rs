@@ -1,4 +1,5 @@
 use std::cmp::Ordering;
+use std::borrow::Cow;
 use errors;
 use object::Object;
 use object_pool::ObjectPool;
@@ -104,6 +105,20 @@ impl<'a, 'b> ValueContext<'a, 'b> {
             (Value::Int(a), Value::Int(b)) => a.partial_cmp(&b),
             (Value::Float(a), Value::Float(b)) => a.partial_cmp(&b),
             _ => None
+        }
+    }
+
+    pub fn to_str<'z>(&'z self) -> Cow<'z, str> {
+        match *self.value {
+            Value::Object(_) => Cow::from(self.as_object_direct().to_str()),
+            Value::Null => Cow::from("(null)"),
+            Value::Bool(v) => Cow::from(if v {
+                "true"
+            } else {
+                "false"
+            }),
+            Value::Int(v) => Cow::from(format!("{}", v)),
+            Value::Float(v) => Cow::from(format!("{}", v))
         }
     }
 }

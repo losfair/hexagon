@@ -31,9 +31,11 @@ pub enum OpCode {
     FloatDiv,
     FloatPowi,
     FloatPowf,
+    StringAdd,
     CastToFloat,
     CastToInt,
     CastToBool,
+    CastToString,
     Not,
     TestLt,
     TestEq,
@@ -69,8 +71,9 @@ impl OpCode {
             Return => (1, 0), // pops retval,
             IntAdd | IntSub | IntMul | IntDiv | IntMod | IntPow
                 | FloatAdd | FloatSub | FloatMul | FloatDiv
-                | FloatPowi | FloatPowf => (2, 1), // pops the two operands, pushes the result
-            CastToFloat | CastToInt | CastToBool => (1, 1),
+                | FloatPowi | FloatPowf
+                | StringAdd => (2, 1), // pops the two operands, pushes the result
+            CastToFloat | CastToInt | CastToBool | CastToString => (1, 1),
             Not => (1, 1),
             TestLt | TestEq | TestGt => (2, 1), // pops the two operands, pushes the result
             Call(n_args) => (n_args + 2, 1), // pops target & this & arguments, pushes the result
