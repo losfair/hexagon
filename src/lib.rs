@@ -5,7 +5,6 @@ extern crate test;
 
 extern crate smallvec;
 extern crate byteorder;
-extern crate bincode;
 
 extern crate serde;
 #[macro_use]

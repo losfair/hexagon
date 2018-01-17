@@ -10,8 +10,8 @@ pub struct Program<'a> {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProgramInfo<'a> {
-    functions: Vec<Function>,
-    native_functions: Vec<&'a str>
+    pub functions: Vec<Function>,
+    pub native_functions: Vec<&'a str>
 }
 
 pub struct NativeFunction<'a> {
@@ -91,20 +91,5 @@ impl<'a> Program<'a> {
         }
 
         Some(program)
-    }
-}
-
-impl<'a> ProgramInfo<'a> {
-    pub fn to_bincode(&self) -> Vec<u8> {
-        use bincode::{serialize, Infinite};
-        serialize(self, Infinite).unwrap()
-    }
-
-    pub fn from_bincode(bc: &'a [u8]) -> Option<ProgramInfo<'a>> {
-        use bincode::deserialize;
-        match deserialize(bc) {
-            Ok(v) => Some(v),
-            Err(_) => None
-        }
     }
 }

@@ -1,4 +1,4 @@
-use super::program::{Program, ProgramInfo, NativeFunction};
+use super::program::{Program, NativeFunction};
 use super::function::Function;
 use super::basic_block::BasicBlock;
 use super::opcode::OpCode;
@@ -21,10 +21,9 @@ fn test_ser_de() {
     program.append_native_function(NativeFunction::new("test_feed", &test_feed));
 
     let info = program.dump();
-    let serialized_info = info.to_bincode();
 
     let program = Program::load(
-        ProgramInfo::from_bincode(serialized_info.as_slice()).unwrap(),
+        info,
         |name| {
             match name {
                 "test_feed" => Some(NativeFunction::new("test_feed", &test_feed)),
