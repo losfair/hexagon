@@ -37,7 +37,7 @@ impl<'a, 'b> ValueContext<'a, 'b> {
         }
     }
 
-    pub fn as_object(&self) -> ObjectHandle<'b> {
+    pub fn as_object<'z>(&self) -> ObjectHandle<'z> {
         self.pool.get(self.as_object_id())
     }
 

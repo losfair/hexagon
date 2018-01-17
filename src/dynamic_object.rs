@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::cell::RefCell;
 use object::Object;
 use object_pool::ObjectPool;
-use value::Value;
+use value::{Value, ValueContext};
+use executor::ExecutorImpl;
+use errors::{VMError, RuntimeError};
 
 pub struct DynamicObject {
     prototype: Option<usize>,
@@ -48,6 +50,17 @@ impl Object for DynamicObject {
 
     fn set_field(&self, name: &str, value: Value) {
         self.fields.borrow_mut().insert(name.to_string(), value);
+    }
+
+    fn call(&self, executor: &mut ExecutorImpl) -> Value {
+        let target = match self.get_field(executor.get_object_pool(), "__call__") {
+            Some(v) => v,
+            None => panic!(VMError::from(RuntimeError::new(
+                "Attempting to call a dynamic object without the `__call__` method"
+            )))
+        };
+        let target = ValueContext::new(&target, executor.get_object_pool()).as_object();
+        target.call(executor)
     }
 }
 

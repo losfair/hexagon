@@ -21,6 +21,7 @@ impl<'a> Deref for ObjectHandle<'a> {
 }
 
 pub struct ObjectNativeRefInfo {
+    // TODO: Remove Rc
     n_refs: Rc<RefCell<usize>>,
 
     // in case n_refs becomes zero
