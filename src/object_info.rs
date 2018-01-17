@@ -1,6 +1,6 @@
 use std::ops::Deref;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::Cell;
 use object::Object;
 
 pub struct ObjectInfo {
@@ -22,7 +22,7 @@ impl<'a> Deref for ObjectHandle<'a> {
 
 pub struct ObjectNativeRefInfo {
     // TODO: Remove Rc
-    n_refs: Rc<RefCell<usize>>,
+    n_refs: Rc<Cell<usize>>,
 
     // in case n_refs becomes zero
     gc_notified: bool
@@ -33,7 +33,7 @@ impl ObjectInfo {
         ObjectInfo {
             object: obj,
             native_ref_info: ObjectNativeRefInfo {
-                n_refs: Rc::new(RefCell::new(0)),
+                n_refs: Rc::new(Cell::new(0)),
                 gc_notified: false
             }
         }
@@ -48,7 +48,7 @@ impl ObjectInfo {
     }
 
     pub fn has_native_refs(&self) -> bool {
-        if *self.native_ref_info.n_refs.borrow() == 0 {
+        if self.native_ref_info.n_refs.get() == 0 {
             false
         } else {
             true
@@ -67,7 +67,7 @@ impl ObjectInfo {
 
 impl Drop for ObjectInfo {
     fn drop(&mut self) {
-        if *self.native_ref_info.n_refs.borrow() != 0 {
+        if self.native_ref_info.n_refs.get() != 0 {
             eprintln!("Attempting to drop object with alive references");
             ::std::process::abort();
         }
@@ -76,7 +76,7 @@ impl Drop for ObjectInfo {
 
 impl Clone for ObjectNativeRefInfo {
     fn clone(&self) -> Self {
-        (*self.n_refs.borrow_mut()) += 1;
+        self.n_refs.replace(self.n_refs.get() + 1);
         ObjectNativeRefInfo {
             n_refs: self.n_refs.clone(),
             gc_notified: false
@@ -86,13 +86,13 @@ impl Clone for ObjectNativeRefInfo {
 
 impl Drop for ObjectNativeRefInfo {
     fn drop(&mut self) {
-        let mut n_refs = self.n_refs.borrow_mut();
+        let n_refs = self.n_refs.get();
 
         if self.gc_notified {
-            assert_eq!(*n_refs, 0);
+            assert_eq!(n_refs, 0);
         } else {
-            assert!(*n_refs > 0);
-            *n_refs -= 1;
+            assert!(n_refs > 0);
+            self.n_refs.replace(n_refs - 1);
         }
     }
 }
