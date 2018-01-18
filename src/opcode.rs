@@ -1,3 +1,8 @@
+/// Hexagon VM opcodes.
+///
+/// Note that the `Rt` variant is only meant to be used internally
+/// by the optimizer and will not pass code validation at function
+/// creation.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum OpCode {
     LoadNull,

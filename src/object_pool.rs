@@ -4,6 +4,7 @@ use static_root::StaticRoot;
 use call_stack::CallStack;
 use errors;
 
+/// An object pool that provides the backing object storage for executors.
 pub struct ObjectPool {
     objects: Vec<Option<ObjectInfo>>,
     object_idx_pool: Vec<usize>,
@@ -21,6 +22,7 @@ impl ObjectPool {
         }
     }
 
+    /// Pins an object to the pool.
     pub fn allocate(&mut self, mut inner: Box<Object>) -> usize {
         inner.initialize(self);
 
@@ -48,28 +50,47 @@ impl ObjectPool {
         pool.push(id);
     }
 
+    /// Gets a handle to the object at `id`.
+    ///
+    /// The handle can be passed around safely and
+    /// the underlying object will not be garbage
+    /// collected until all handles to it are released.
+    ///
+    /// If the object pool gets destroyed before
+    /// all handles are dropped, the process will be
+    /// aborted because of memory unsafety introduced
+    /// by reference invalidation.
     pub fn get<'a>(&self, id: usize) -> ObjectHandle<'a> {
         self.objects[id].as_ref().unwrap().handle()
     }
 
+    /// Gets a direct reference to the object at `id`.
     pub fn get_direct(&self, id: usize) -> &Object {
         self.objects[id].as_ref().unwrap().as_object()
     }
 
+    /// Gets a direct typed reference to the object at `id`.
+    /// If downcast fails, `None` is returned.
     pub fn get_direct_typed<T: 'static>(&self, id: usize) -> Option<&T> {
         self.get_direct(id).as_any().downcast_ref::<T>()
     }
 
+    /// Gets a direct reference to the object at `id`.
+    /// If downcast fails, this raises a `RuntimeError`.
     pub fn must_get_direct_typed<T: 'static>(&self, id: usize) -> &T {
         self.get_direct_typed(id).unwrap_or_else(|| {
             panic!(errors::VMError::from(errors::RuntimeError::new("Type mismatch")))
         })
     }
 
+    /// Gets a typed object handle to the object at `id`.
+    /// If downcast fails, `None` is returned.
     pub fn get_typed<'a, T: 'static>(&self, id: usize) -> Option<TypedObjectHandle<'a, T>> {
         TypedObjectHandle::downcast_from(self.get(id))
     }
 
+    /// Gets a typed object handle to the object at `id`.
+    /// If downcast fails, this raises a `RuntimeError`.
     pub fn must_get_typed<'a, T: 'static>(&self, id: usize) -> TypedObjectHandle<'a, T> {
         self.get_typed(id).unwrap_or_else(|| {
             panic!(errors::VMError::from(errors::RuntimeError::new("Type mismatch")))
@@ -92,6 +113,8 @@ impl ObjectPool {
         self.alloc_count = 0;
     }
 
+    /// Run the garbage collector with the execution context
+    /// provided by the given call stack.
     pub fn collect(&mut self, stack: &CallStack) {
         let mut visited: Vec<bool> = vec![false; self.objects.len()];
 

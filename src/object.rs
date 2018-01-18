@@ -5,6 +5,16 @@ use executor::{ExecutorImpl};
 use object_pool::ObjectPool;
 use value::{Value, ValueContext};
 
+/// A heap-allocated object.
+///
+/// This is the core abstraction in the Hexagon VM type system.
+/// After creating, an object must be pinned to the object pool
+/// for use in the virtual environment.
+///
+/// If any initialization is required before the object is pinned
+/// to object pool, it should be done in the `initialize` method,
+/// which takes a mutable reference to the object pool and makes
+/// it possible to do preparations e.g. creating built-in fields.
 pub trait Object {
     fn finalize(&self, _pool: &mut ObjectPool) {}
 
