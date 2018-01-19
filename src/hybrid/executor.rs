@@ -4,6 +4,8 @@ use super::function::Function;
 use super::opcode::OpCode;
 use super::type_cast;
 use super::program::Program;
+use super::program_context::{ProgramContext, CommonProgramContext};
+use super::jit::NoJit;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 pub struct Executor {
@@ -59,7 +61,7 @@ impl Executor {
 
     fn eval_partial(
         &self,
-        program: &Program,
+        program: &CommonProgramContext,
         local: &mut Local,
         f: &Function,
         block_id: usize
@@ -355,34 +357,41 @@ impl Executor {
                     self.eval_program(program, target);
                 },
                 OpCode::CallNative(target) => {
-                    program.native_functions[target].invoke(self);
+                    program.get_program().native_functions[target].invoke(self);
                 },
                 OpCode::CallNativeIndirect(target) => {
                     let target = local.regs[target] as usize;
-                    program.native_functions[target].invoke(self);
+                    program.get_program().native_functions[target].invoke(self);
                 }
             }
         }
         panic!("Terminator not found");
     }
 
-    pub fn eval_program(&self, program: &Program, entry_fn: usize) {
-        let mut local = Local {
-            regs: [0u64; 16]
-        };
-        let mut block_id: usize = 0;
+    pub fn eval_program(&self, program: &CommonProgramContext, entry_fn: usize) {
 
-        let entry = &program.functions[entry_fn];
+        let entry = &program.get_program().functions[entry_fn];
 
         if self.call_stack_depth.get() >= self.max_call_stack_depth {
             panic!("Max call stack depth exceeded");
         }
 
-        // FIXME: Seems that the Cell has a negative impact on performance
+        // FIXME: It seems that the Cell has a negative impact on performance
         // (bench_invoke: 20ns -> 28ns)
         self.call_stack_depth.replace(self.call_stack_depth.get() + 1);
 
         let result = catch_unwind(AssertUnwindSafe(|| {
+            if let Some(provider) = program.get_jit_provider() {
+                if provider.invoke_function(program, entry_fn) == true {
+                    return;
+                }
+            }
+
+            let mut local = Local {
+                regs: [0u64; 16]
+            };
+            let mut block_id: usize = 0;
+
             loop {
                 match self.eval_partial(program, &mut local, entry, block_id) {
                     EvalControlMessage::Return => {
@@ -394,6 +403,7 @@ impl Executor {
                 }
             }
         }));
+        
         self.call_stack_depth.replace(self.call_stack_depth.get() - 1);
 
         if let Err(e) = result {
@@ -401,8 +411,10 @@ impl Executor {
         }
     }
 
-    pub fn eval_function(&mut self, f: &Function) {
-        self.eval_program(&Program::from_functions(vec! [ f.clone() ]), 0)
+    pub fn eval_function(&self, f: &Function) {
+        let program = Program::from_functions(vec! [ f.clone() ]);
+        let ctx = ProgramContext::new(self, program, None as Option<NoJit>);
+        self.eval_program(&ctx, 0)
     }
 }
 

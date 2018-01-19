@@ -3,6 +3,8 @@ use super::function::Function;
 use super::basic_block::BasicBlock;
 use super::opcode::OpCode;
 use super::executor::Executor;
+use super::program_context::ProgramContext;
+use super::jit::NoJit;
 
 #[test]
 fn test_ser_de() {
@@ -32,7 +34,7 @@ fn test_ser_de() {
         }
     ).unwrap();
     let executor = Executor::new();
-    executor.eval_program(&program, 0);
+    executor.eval_program(&ProgramContext::new(&executor, program, None as Option<NoJit>), 0);
 
     assert_eq!(executor.read_global(0), 42);
 }

@@ -4,6 +4,8 @@ use super::basic_block::BasicBlock;
 use super::opcode::OpCode;
 use super::page_table::PageTable;
 use super::program::{Program, NativeFunction};
+use super::program_context::ProgramContext;
+use super::jit::NoJit;
 
 #[test]
 fn test_sum() {
@@ -42,9 +44,10 @@ fn test_sum() {
     ]);
 
     let executor = Executor::with_page_table(pt.clone());
-    executor.eval_program(&Program::from_functions(vec! [
+    let program = Program::from_functions(vec! [
         sum_fn
-    ]), 0);
+    ]);
+    executor.eval_program(&ProgramContext::new(&executor, program, None as Option<NoJit>), 0);
 
     let result = pt.read_u64(0x08000016).unwrap();
     assert_eq!(result, (1 + END) * END / 2);
@@ -68,9 +71,10 @@ fn test_int_types() {
     ]);
 
     let executor = Executor::with_page_table(pt.clone());
-    executor.eval_program(&Program::from_functions(vec! [
+    let program = Program::from_functions(vec! [
         test_fn
-    ]), 0);
+    ]);
+    executor.eval_program(&ProgramContext::new(&executor, program, None as Option<NoJit>), 0);
 
     let result = pt.read_i64(0x08000000);
     assert_eq!(result, Some((-10 + 3) * 3));
@@ -103,9 +107,10 @@ fn test_fp() {
     ]);
 
     let executor = Executor::with_page_table(pt.clone());
-    executor.eval_program(&Program::from_functions(vec! [
+    let program = Program::from_functions(vec! [
         test_fn
-    ]), 0);
+    ]);
+    executor.eval_program(&ProgramContext::new(&executor, program, None as Option<NoJit>), 0);
 
     let result = pt.read_f64(0x08000000).unwrap();
     assert!((result - (::std::f64::consts::PI * 2.0 + 1.0 - 3.0) / 0.7).abs() < 1e-12);
@@ -148,7 +153,7 @@ fn test_fn_call() {
     program.append_native_function(NativeFunction::new("set", &setter));
 
     let executor = Executor::new();
-    executor.eval_program(&program, 0);
+    executor.eval_program(&ProgramContext::new(&executor, program, None as Option<NoJit>), 0);
 
     assert_eq!(*result.borrow(), 42 + 99);
 }
