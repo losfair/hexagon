@@ -7,7 +7,7 @@ use super::function::Function;
 
 #[bench]
 fn bench_invoke(b: &mut Bencher) {
-    let mut executor = Executor::new();
+    let executor = Executor::new();
     let program = Program::from_functions(vec! [
         Function::from_basic_blocks(vec! [
             BasicBlock::from_opcodes(vec! [

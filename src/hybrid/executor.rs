@@ -1,3 +1,4 @@
+use std::cell::{Cell, RefCell, Ref};
 use super::page_table::PageTable;
 use super::function::Function;
 use super::opcode::OpCode;
@@ -6,9 +7,9 @@ use super::program::Program;
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 pub struct Executor {
-    page_table: PageTable,
-    globals: [u64; 16],
-    call_stack_depth: usize,
+    page_table: RefCell<PageTable>,
+    globals: [Cell<u64>; 16],
+    call_stack_depth: Cell<usize>,
     max_call_stack_depth: usize
 }
 
@@ -24,40 +25,40 @@ enum EvalControlMessage {
 impl Executor {
     pub fn new() -> Executor {
         Executor {
-            page_table: PageTable::new(),
-            globals: [0; 16],
-            call_stack_depth: 0,
+            page_table: RefCell::new(PageTable::new()),
+            globals: build_global_regs(),
+            call_stack_depth: Cell::new(0),
             max_call_stack_depth: 512
         }
     }
 
     pub fn with_page_table(pt: PageTable) -> Executor {
         Executor {
-            page_table: pt,
-            globals: [0; 16],
-            call_stack_depth: 0,
+            page_table: RefCell::new(pt),
+            globals: build_global_regs(),
+            call_stack_depth: Cell::new(0),
             max_call_stack_depth: 512
         }
     }
 
-    pub fn get_page_table(&self) -> &PageTable {
-        &self.page_table
+    pub fn get_page_table<'a>(&'a self) -> Ref<'a, PageTable> {
+        self.page_table.borrow()
     }
 
-    pub fn set_page_table(&mut self, pt: PageTable) {
-        self.page_table = pt;
+    pub fn set_page_table(&self, pt: PageTable) {
+        *self.page_table.borrow_mut() = pt;
     }
 
     pub fn read_global(&self, id: usize) -> u64 {
-        self.globals[id]
+        self.globals[id].get()
     }
 
-    pub fn write_global(&mut self, id: usize, value: u64) {
-        self.globals[id] = value;
+    pub fn write_global(&self, id: usize, value: u64) {
+        self.globals[id].replace(value);
     }
 
     fn eval_partial(
-        &mut self,
+        &self,
         program: &Program,
         local: &mut Local,
         f: &Function,
@@ -307,44 +308,44 @@ impl Executor {
                 },
                 OpCode::Load8(target, p) => {
                     let addr = local.regs[p];
-                    local.regs[target] = self.page_table.read_u8(addr).unwrap() as u64;
+                    local.regs[target] = self.page_table.borrow_mut().read_u8(addr).unwrap() as u64;
                 },
                 OpCode::Load16(target, p) => {
                     let addr = local.regs[p];
-                    local.regs[target] = self.page_table.read_u16(addr).unwrap() as u64;
+                    local.regs[target] = self.page_table.borrow_mut().read_u16(addr).unwrap() as u64;
                 },
                 OpCode::Load32(target, p) => {
                     let addr = local.regs[p];
-                    local.regs[target] = self.page_table.read_u32(addr).unwrap() as u64;
+                    local.regs[target] = self.page_table.borrow_mut().read_u32(addr).unwrap() as u64;
                 },
                 OpCode::Load64(target, p) => {
                     let addr = local.regs[p];
-                    local.regs[target] = self.page_table.read_u64(addr).unwrap() as u64;
+                    local.regs[target] = self.page_table.borrow_mut().read_u64(addr).unwrap() as u64;
                 },
                 OpCode::Store8(src, p) => {
                     let addr = local.regs[p];
-                    self.page_table.write_u8(addr, (local.regs[src] & 0xff) as u8);
+                    self.page_table.borrow_mut().write_u8(addr, (local.regs[src] & 0xff) as u8);
                 },
                 OpCode::Store16(src, p) => {
                     let addr = local.regs[p];
-                    self.page_table.write_u16(addr, (local.regs[src] & 0xffff) as u16);
+                    self.page_table.borrow_mut().write_u16(addr, (local.regs[src] & 0xffff) as u16);
                 },
                 OpCode::Store32(src, p) => {
                     let addr = local.regs[p];
-                    self.page_table.write_u32(addr, (local.regs[src] & 0xffffffff) as u32);
+                    self.page_table.borrow_mut().write_u32(addr, (local.regs[src] & 0xffffffff) as u32);
                 },
                 OpCode::Store64(src, p) => {
                     let addr = local.regs[p];
-                    self.page_table.write_u64(addr, local.regs[src]);
+                    self.page_table.borrow_mut().write_u64(addr, local.regs[src]);
                 },
                 OpCode::Mov(dst, src) => {
                     local.regs[dst] = local.regs[src];
                 },
                 OpCode::LoadGlobal(dst, src) => {
-                    local.regs[dst] = self.globals[src];
+                    local.regs[dst] = self.read_global(src);
                 },
                 OpCode::StoreGlobal(dst, src) => {
-                    self.globals[dst] = local.regs[src];
+                    self.write_global(dst, local.regs[src]);
                 },
                 OpCode::Call(target) => {
                     self.eval_program(program, target);
@@ -365,7 +366,7 @@ impl Executor {
         panic!("Terminator not found");
     }
 
-    pub fn eval_program(&mut self, program: &Program, entry_fn: usize) {
+    pub fn eval_program(&self, program: &Program, entry_fn: usize) {
         let mut local = Local {
             regs: [0u64; 16]
         };
@@ -373,11 +374,14 @@ impl Executor {
 
         let entry = &program.functions[entry_fn];
 
-        if self.call_stack_depth >= self.max_call_stack_depth {
+        if self.call_stack_depth.get() >= self.max_call_stack_depth {
             panic!("Max call stack depth exceeded");
         }
 
-        self.call_stack_depth += 1;
+        // FIXME: Seems that the Cell has a negative impact on performance
+        // (bench_invoke: 20ns -> 28ns)
+        self.call_stack_depth.replace(self.call_stack_depth.get() + 1);
+
         let result = catch_unwind(AssertUnwindSafe(|| {
             loop {
                 match self.eval_partial(program, &mut local, entry, block_id) {
@@ -390,7 +394,7 @@ impl Executor {
                 }
             }
         }));
-        self.call_stack_depth -= 1;
+        self.call_stack_depth.replace(self.call_stack_depth.get() - 1);
 
         if let Err(e) = result {
             resume_unwind(e);
@@ -400,4 +404,25 @@ impl Executor {
     pub fn eval_function(&mut self, f: &Function) {
         self.eval_program(&Program::from_functions(vec! [ f.clone() ]), 0)
     }
+}
+
+fn build_global_regs() -> [Cell<u64>; 16] {
+    [
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0),
+        Cell::new(0)
+    ]
 }

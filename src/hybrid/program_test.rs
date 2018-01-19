@@ -6,7 +6,7 @@ use super::executor::Executor;
 
 #[test]
 fn test_ser_de() {
-    fn test_feed(executor: &mut Executor) {
+    fn test_feed(executor: &Executor) {
         executor.write_global(0, 42);
     }
 
@@ -31,7 +31,7 @@ fn test_ser_de() {
             }
         }
     ).unwrap();
-    let mut executor = Executor::new();
+    let executor = Executor::new();
     executor.eval_program(&program, 0);
 
     assert_eq!(executor.read_global(0), 42);

@@ -41,7 +41,7 @@ fn test_sum() {
         ])
     ]);
 
-    let mut executor = Executor::with_page_table(pt.clone());
+    let executor = Executor::with_page_table(pt.clone());
     executor.eval_program(&Program::from_functions(vec! [
         sum_fn
     ]), 0);
@@ -67,7 +67,7 @@ fn test_int_types() {
         ])
     ]);
 
-    let mut executor = Executor::with_page_table(pt.clone());
+    let executor = Executor::with_page_table(pt.clone());
     executor.eval_program(&Program::from_functions(vec! [
         test_fn
     ]), 0);
@@ -102,7 +102,7 @@ fn test_fp() {
         ])
     ]);
 
-    let mut executor = Executor::with_page_table(pt.clone());
+    let executor = Executor::with_page_table(pt.clone());
     executor.eval_program(&Program::from_functions(vec! [
         test_fn
     ]), 0);
@@ -117,7 +117,7 @@ fn test_fn_call() {
 
     let result: RefCell<u64> = RefCell::new(0);
 
-    let setter = |executor: &mut Executor| -> () {
+    let setter = |executor: &Executor| -> () {
         *result.borrow_mut() = executor.read_global(1);
     };
 
@@ -147,7 +147,7 @@ fn test_fn_call() {
     ]);
     program.append_native_function(NativeFunction::new("set", &setter));
 
-    let mut executor = Executor::new();
+    let executor = Executor::new();
     executor.eval_program(&program, 0);
 
     assert_eq!(*result.borrow(), 42 + 99);
