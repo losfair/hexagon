@@ -4,7 +4,7 @@ use super::executor::Executor;
 
 #[derive(Debug)]
 pub struct Program<'a> {
-    pub(super) functions: Vec<Function>,
+    pub functions: Vec<Function>,
     pub(super) native_functions: Vec<NativeFunction<'a>>
 }
 

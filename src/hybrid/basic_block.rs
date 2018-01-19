@@ -2,7 +2,7 @@ use super::opcode::OpCode;
 
 #[derive(Clone, Debug)]
 pub struct BasicBlock {
-    pub(super) opcodes: Vec<OpCode>
+    pub opcodes: Vec<OpCode>
 }
 
 impl BasicBlock {

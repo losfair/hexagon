@@ -2,7 +2,7 @@ use super::basic_block::BasicBlock;
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    pub(super) basic_blocks: Vec<BasicBlock>
+    pub basic_blocks: Vec<BasicBlock>
 }
 
 impl Function {
