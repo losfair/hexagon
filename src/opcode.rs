@@ -3,7 +3,7 @@
 /// Note that the `Rt` variant is only meant to be used internally
 /// by the optimizer and will not pass code validation at function
 /// creation.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OpCode {
     LoadNull,
     LoadInt(i64),
@@ -52,7 +52,6 @@ pub enum OpCode {
     TestGe,
     TestGt,
 
-    #[serde(skip_serializing, skip_deserializing)]
     Rt(RtOpCode)
 }
 

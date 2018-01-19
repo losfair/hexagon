@@ -1,4 +1,4 @@
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub enum OpCode {
     Return,
     Branch(usize),

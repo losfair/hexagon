@@ -8,7 +8,7 @@ pub struct Program<'a> {
     pub(super) native_functions: Vec<NativeFunction<'a>>
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct ProgramInfo<'a> {
     pub functions: Vec<Function>,
     pub native_functions: Vec<&'a str>

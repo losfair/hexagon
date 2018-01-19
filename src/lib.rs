@@ -6,10 +6,6 @@ extern crate test;
 extern crate smallvec;
 extern crate byteorder;
 
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-
 pub mod hybrid;
 
 pub mod basic_block;
