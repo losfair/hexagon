@@ -100,7 +100,10 @@ impl<'a> ProgramInfo<'a> {
         ::bincode::serialize(self, ::bincode::Infinite).unwrap()
     }
 
-    pub fn std_deserialize(input: &'a [u8]) -> ProgramInfo<'a> {
-        ::bincode::deserialize(input).unwrap()
+    pub fn std_deserialize(input: &'a [u8]) -> Option<ProgramInfo<'a>> {
+        match ::bincode::deserialize(input) {
+            Ok(v) => Some(v),
+            Err(_) => None
+        }
     }
 }
