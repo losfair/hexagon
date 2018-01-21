@@ -1,6 +1,6 @@
 use super::basic_block::BasicBlock;
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Function {
     pub basic_blocks: Vec<BasicBlock>
 }

@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Formatter};
+use std::borrow::Cow;
 use super::function::Function;
 use super::executor::Executor;
 
@@ -8,10 +9,10 @@ pub struct Program<'a> {
     pub(super) native_functions: Vec<NativeFunction<'a>>
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ProgramInfo<'a> {
     pub functions: Vec<Function>,
-    pub native_functions: Vec<&'a str>
+    pub native_functions: Vec<Cow<'a, str>>
 }
 
 pub struct NativeFunction<'a> {
@@ -78,7 +79,7 @@ impl<'a> Program<'a> {
     pub fn dump(&self) -> ProgramInfo {
         ProgramInfo {
             functions: self.functions.clone(),
-            native_functions: self.native_functions.iter().map(|v| v.name.as_str()).collect()
+            native_functions: self.native_functions.iter().map(|v| Cow::from(v.name.as_str())).collect()
         }
     }
 
@@ -91,5 +92,15 @@ impl<'a> Program<'a> {
         }
 
         Some(program)
+    }
+}
+
+impl<'a> ProgramInfo<'a> {
+    pub fn std_serialize(&self) -> Vec<u8> {
+        ::bincode::serialize(self, ::bincode::Infinite).unwrap()
+    }
+
+    pub fn std_deserialize(input: &'a [u8]) -> ProgramInfo<'a> {
+        ::bincode::deserialize(input).unwrap()
     }
 }
