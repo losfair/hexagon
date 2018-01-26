@@ -18,6 +18,11 @@ pub struct VirtualFunction {
     should_optimize: bool
 }
 
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct VirtualFunctionInfo {
+    pub basic_blocks: Vec<BasicBlock>
+}
+
 pub type NativeFunction = Box<Fn(&mut ExecutorImpl) -> Value>;
 
 impl Object for Function {
@@ -81,6 +86,19 @@ impl Function {
 
     pub fn from_native(nf: NativeFunction) -> Function {
         Function::Native(nf)
+    }
+
+    pub fn to_virtual_info(&self) -> Option<VirtualFunctionInfo> {
+        match *self {
+            Function::Virtual(ref vf) => Some(VirtualFunctionInfo {
+                basic_blocks: vf.basic_blocks.clone()
+            }),
+            Function::Native(_) => None
+        }
+    }
+
+    pub fn from_virtual_info(vinfo: VirtualFunctionInfo) -> Self {
+        Function::from_basic_blocks(vinfo.basic_blocks)
     }
 }
 
