@@ -133,9 +133,9 @@ impl ExecutorImpl {
         self.set_static_object(key, Value::Object(obj_id));
     }
 
-    pub fn get_static_object<K: AsRef<str>>(&self, key: K) -> Option<Value> {
+    pub fn get_static_object<K: AsRef<str>>(&self, key: K) -> Option<&Value> {
         let key = key.as_ref();
-        self.static_objects.get(key).map(|v| *v)
+        self.static_objects.get(key)
     }
 
     fn eval_basic_blocks_impl(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> EvalControlMessage {
@@ -652,7 +652,7 @@ impl ExecutorImpl {
     }
 
     pub fn run_callable<K: AsRef<str>>(&mut self, key: K) -> Result<(), errors::VMError> {
-        let callable_obj_id = self.get_static_object(key).unwrap_or_else(|| {
+        let callable_obj_id = *self.get_static_object(key).unwrap_or_else(|| {
             panic!(errors::VMError::from(errors::RuntimeError::new("Static object not found")));
         });
 
