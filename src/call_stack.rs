@@ -22,7 +22,7 @@ pub struct Frame {
 impl CallStack {
     pub fn new() -> CallStack {
         CallStack {
-            frames: Vec::new(),
+            frames: vec! [ Frame::with_arguments(Value::Null, &[]) ],
             limit: None
         }
     }
