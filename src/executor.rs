@@ -81,7 +81,7 @@ impl ExecutorImpl {
         &mut self.hybrid_executor
     }
 
-    fn invoke(&mut self, callable_val: Value, this: Value, args: &[Value]) {
+    pub fn invoke(&mut self, callable_val: Value, this: Value, args: &[Value]) {
         let frame = Frame::with_arguments(this, args);
 
         // Push the callable object onto the execution stack
