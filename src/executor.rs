@@ -90,7 +90,9 @@ impl ExecutorImpl {
 
         let callable_obj_id = match callable_val {
             Value::Object(id) => id,
-            _ => panic!(errors::VMError::from(errors::RuntimeError::new("Not callable")))
+            _ => panic!(errors::VMError::from(
+                format!("Not callable. Got: {:?}", callable_val)
+            ))
         };
 
         self.get_current_frame().push_exec(callable_val);
@@ -675,6 +677,24 @@ impl ExecutorImpl {
                     };
 
                     self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Greater)));
+                },
+                OpCode::Rotate2 => {
+                    let frame = self.get_current_frame();
+                    let a = frame.pop_exec();
+                    let b = frame.pop_exec();
+
+                    frame.push_exec(a);
+                    frame.push_exec(b);
+                },
+                OpCode::Rotate3 => {
+                    let frame = self.get_current_frame();
+                    let a = frame.pop_exec();
+                    let b = frame.pop_exec();
+                    let c = frame.pop_exec();
+
+                    frame.push_exec(b);
+                    frame.push_exec(a);
+                    frame.push_exec(c);
                 },
                 OpCode::Rt(ref op) => {
                     match *op {

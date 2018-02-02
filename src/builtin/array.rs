@@ -32,7 +32,7 @@ impl Object for Array {
 
     fn call_field(&self, name: &str, executor: &mut ExecutorImpl) -> Value {
         match name {
-            "get" => {
+            "__get__" | "get" => {
                 let index = executor.get_current_frame().must_get_argument(0);
                 let index = ValueContext::new(
                     &index,
@@ -44,7 +44,7 @@ impl Object for Array {
                 }
                 elements[index]
             },
-            "set" => {
+            "__set__" | "set" => {
                 let index = executor.get_current_frame().must_get_argument(0);
                 let val = executor.get_current_frame().must_get_argument(1);
 
@@ -69,7 +69,7 @@ impl Object for Array {
             "pop" => {
                 self.elements.borrow_mut().pop().unwrap_or_else(|| panic!(VMError::from("No elements")))
             },
-            "len" | "size" => {
+            "__len__" | "len" | "size" => {
                 Value::Int(self.elements.borrow().len() as i64)
             },
             _ => panic!(VMError::from(FieldNotFoundError::from_field_name(name)))
