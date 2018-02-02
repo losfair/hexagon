@@ -81,7 +81,10 @@ impl ExecutorImpl {
 
     pub fn invoke(&mut self, callable_val: Value, this: Value, field_name: Option<&str>, args: &[Value]) {
         let mut frame = FrameHandle::new();
-        frame.init_with_arguments(this, args);
+        frame.init_with_arguments(match this {
+            Value::Null => self.get_current_frame().get_this(),
+            _ => this
+        }, args);
 
         // Push the callable object onto the execution stack
         // to prevent it from begin GC-ed.
