@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use errors::VMError;
+use value::Value;
 use object::Object;
 use object_info::{ObjectInfo, ObjectHandle, TypedObjectHandle};
 use static_root::StaticRoot;
@@ -8,6 +11,7 @@ use errors;
 pub struct ObjectPool {
     objects: Vec<Option<ObjectInfo>>,
     object_idx_pool: Vec<usize>,
+    static_objects: HashMap<String, Value>,
     alloc_count: usize
 }
 
@@ -18,6 +22,7 @@ impl ObjectPool {
                 Some(ObjectInfo::new(Box::new(StaticRoot::new())))
             ],
             object_idx_pool: vec![],
+            static_objects: HashMap::new(),
             alloc_count: 0
         }
     }
@@ -103,6 +108,26 @@ impl ObjectPool {
 
     pub fn get_direct_static_root(&self) -> &StaticRoot {
         self.get_direct_typed(0).unwrap()
+    }
+
+    pub fn set_static_object<K: ToString>(&mut self, key: K, obj: Value) {
+        let key = key.to_string();
+
+        // Replacing static objects is denied to ensure
+        // `get_static_object_ref` is safe.
+        if self.static_objects.get(key.as_str()).is_some() {
+            panic!(VMError::from("A static object with the same key already exists"));
+        }
+
+        if let Value::Object(id) = obj {
+            self.get_static_root().append_child(id);
+        }
+        self.static_objects.insert(key, obj);
+    }
+
+    pub fn get_static_object<K: AsRef<str>>(&self, key: K) -> Option<&Value> {
+        let key = key.as_ref();
+        self.static_objects.get(key)
     }
 
     pub fn get_alloc_count(&self) -> usize {

@@ -100,7 +100,9 @@ impl OpCode {
             TestLt | TestLe | TestEq | TestNe | TestGe | TestGt => (2, 1), // pops the two operands, pushes the result
             Call(n_args) => (n_args + 2, 1), // pops target & this & arguments, pushes the result
             CallField(n_args) => (n_args + 3, 1), // pops target & this & field_name & arguments, pushes the result
-            Rt(_) => panic!("Unexpected runtime opcode")
+            Rt(ref op) => match *op {
+                RtOpCode::LoadObject(_) => (0, 1) // pushes the object at id
+            }
         }
     }
 }

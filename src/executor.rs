@@ -1,12 +1,10 @@
 use std::cell::{Ref, RefMut, RefCell};
-use std::collections::HashMap;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::cmp::Ordering;
 use object::Object;
 use call_stack::{CallStack, Frame};
-use opcode::OpCode;
+use opcode::{OpCode, RtOpCode};
 use errors;
-use primitive;
 use basic_block::BasicBlock;
 use object_pool::ObjectPool;
 use smallvec::SmallVec;
@@ -36,7 +34,6 @@ impl Executor {
 
 pub struct ExecutorImpl {
     stack: CallStack,
-    static_objects: HashMap<String, Value>,
     hybrid_executor: HybridExecutor,
 
     object_pool: ObjectPool
@@ -51,7 +48,6 @@ impl ExecutorImpl {
     pub fn new() -> ExecutorImpl {
         let mut ret = ExecutorImpl {
             stack: CallStack::new(),
-            static_objects: HashMap::new(),
             hybrid_executor: HybridExecutor::new(),
             object_pool: ObjectPool::new()
         };
@@ -119,18 +115,7 @@ impl ExecutorImpl {
     }
 
     fn set_static_object<K: ToString>(&mut self, key: K, obj: Value) {
-        let key = key.to_string();
-
-        // Replacing static objects is denied to ensure
-        // `get_static_object_ref` is safe.
-        if self.static_objects.get(key.as_str()).is_some() {
-            panic!(errors::VMError::from(errors::RuntimeError::new("A static object with the same key already exists")));
-        }
-
-        if let Value::Object(id) = obj {
-            self.object_pool.get_static_root().append_child(id);
-        }
-        self.static_objects.insert(key, obj);
+        self.get_object_pool_mut().set_static_object(key, obj);
     }
 
     pub fn create_static_object<K: ToString>(&mut self, key: K, obj: Box<Object>) {
@@ -139,8 +124,7 @@ impl ExecutorImpl {
     }
 
     pub fn get_static_object<K: AsRef<str>>(&self, key: K) -> Option<&Value> {
-        let key = key.as_ref();
-        self.static_objects.get(key)
+        self.get_object_pool().get_static_object(key)
     }
 
     fn eval_basic_blocks_impl(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> EvalControlMessage {
@@ -259,7 +243,7 @@ impl ExecutorImpl {
                         &key_val,
                         self.get_object_pool()
                     ).as_object_direct().to_str();
-                    let maybe_target_obj = self.static_objects.get(key).map(|v| *v);
+                    let maybe_target_obj = self.get_static_object(key).map(|v| *v);
 
                     if let Some(target_obj) = maybe_target_obj {
                         self.get_current_frame().push_exec(target_obj);
@@ -692,7 +676,13 @@ impl ExecutorImpl {
 
                     self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Greater)));
                 },
-                _ => panic!("Not implemented")
+                OpCode::Rt(ref op) => {
+                    match *op {
+                        RtOpCode::LoadObject(id) => {
+                            self.get_current_frame().push_exec(Value::Object(id));
+                        }
+                    }
+                }
             }
         }
 

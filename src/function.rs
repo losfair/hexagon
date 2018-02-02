@@ -79,8 +79,6 @@ impl Function {
     pub fn enable_optimization(&mut self) {
         if let Function::Virtual(ref mut f) = *self {
             f.should_optimize = true;
-        } else {
-            panic!("Optimization is not supported on the current function type");
         }
     }
 

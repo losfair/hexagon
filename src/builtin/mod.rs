@@ -3,7 +3,7 @@ pub mod dynamic_object;
 
 use std::any::Any;
 use object::Object;
-use value::{Value, ValueContext};
+use value::Value;
 use executor::ExecutorImpl;
 use errors::{VMError, FieldNotFoundError};
 
