@@ -24,6 +24,11 @@ pub trait Object {
     fn call(&self, _executor: &mut ExecutorImpl) -> Value {
         panic!(errors::VMError::from(errors::RuntimeError::new("Not callable")));
     }
+    fn call_field(&self, field_name: &str, executor: &mut ExecutorImpl) -> Value {
+        let field = self.must_get_field(executor.get_object_pool(), field_name);
+        let obj = ValueContext::new(&field, executor.get_object_pool()).as_object();
+        obj.call(executor)
+    }
     fn get_field(&self, _pool: &ObjectPool, _name: &str) -> Option<Value> {
         None
     }

@@ -15,6 +15,14 @@ impl<T> From<T> for VMError where T: Object + 'static {
     }
 }
 
+impl<'a> From<&'a str> for VMError {
+    fn from(other: &'a str) -> VMError {
+        VMError {
+            inner: Box::new(other.to_string())
+        }
+    }
+}
+
 impl VMError {
     pub fn unwrap(self) -> Box<Object> {
         self.inner

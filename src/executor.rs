@@ -12,7 +12,7 @@ use object_pool::ObjectPool;
 use smallvec::SmallVec;
 use hybrid::executor::Executor as HybridExecutor;
 use value::{Value, ValueContext};
-use dynamic_object::DynamicObject;
+use builtin::BuiltinObject;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -49,12 +49,14 @@ enum EvalControlMessage {
 
 impl ExecutorImpl {
     pub fn new() -> ExecutorImpl {
-        ExecutorImpl {
+        let mut ret = ExecutorImpl {
             stack: CallStack::new(),
             static_objects: HashMap::new(),
             hybrid_executor: HybridExecutor::new(),
             object_pool: ObjectPool::new()
-        }
+        };
+        ret.create_static_object("__builtin", Box::new(BuiltinObject::new()));
+        ret
     }
 
     pub fn get_current_frame<'a>(&self) -> &Frame {
@@ -81,7 +83,7 @@ impl ExecutorImpl {
         &mut self.hybrid_executor
     }
 
-    pub fn invoke(&mut self, callable_val: Value, this: Value, args: &[Value]) {
+    pub fn invoke(&mut self, callable_val: Value, this: Value, field_name: Option<&str>, args: &[Value]) {
         let frame = Frame::with_arguments(this, args);
 
         // Push the callable object onto the execution stack
@@ -100,7 +102,10 @@ impl ExecutorImpl {
         let callable_obj = self.object_pool.get(callable_obj_id);
 
         self.stack.push(frame);
-        let ret = catch_unwind(AssertUnwindSafe(|| callable_obj.call(self)));
+        let ret = catch_unwind(AssertUnwindSafe(|| match field_name {
+            Some(v) => callable_obj.call_field(v, self),
+            None => callable_obj.call(self)
+        }));
         self.stack.pop();
 
         self.get_current_frame().pop_exec();
@@ -163,7 +168,7 @@ impl ExecutorImpl {
                     self.get_current_frame().push_exec(Value::Bool(value));
                 },
                 OpCode::LoadString(ref value) => {
-                    let obj = self.object_pool.allocate(Box::new(primitive::StringObject::new(value)));
+                    let obj = self.object_pool.allocate(Box::new(value.clone()));
                     self.get_current_frame().push_exec(Value::Object(obj));
                 },
                 OpCode::LoadThis => {
@@ -183,7 +188,24 @@ impl ExecutorImpl {
 
                         (target, this, args)
                     };
-                    self.invoke(target, this, args.as_slice());
+                    self.invoke(target, this, None, args.as_slice());
+                },
+                OpCode::CallField(n_args) => {
+                    let (target, this, field_name, args) = {
+                        let frame = self.get_current_frame();
+
+                        let target = frame.pop_exec();
+                        let this = frame.pop_exec();
+                        let field_name = frame.pop_exec();
+
+                        let args: SmallVec<[Value; 4]> = (0..n_args)
+                            .map(|_| frame.pop_exec())
+                            .collect();
+
+                        (target, this, field_name, args)
+                    };
+                    let field_name = ValueContext::new(&field_name, self.get_object_pool()).to_str().to_string();
+                    self.invoke(target, this, Some(field_name.as_str()), args.as_slice());
                 },
                 OpCode::Pop => {
                     self.get_current_frame().pop_exec();
@@ -296,17 +318,6 @@ impl ExecutorImpl {
                     ).as_object_direct().to_str();
 
                     target_obj.set_field(key, value);
-                },
-                OpCode::CreateObject => {
-                    let prototype = match self.get_current_frame().pop_exec() {
-                        Value::Object(id) => Some(id),
-                        Value::Null => None,
-                        _ => panic!(errors::VMError::from(errors::RuntimeError::new("Invalid prototype object")))
-                    };
-                    let obj = self.get_object_pool_mut().allocate(
-                        Box::new(DynamicObject::new(prototype))
-                    );
-                    self.get_current_frame().push_exec(Value::Object(obj));
                 },
                 OpCode::Branch(target_id) => {
                     return EvalControlMessage::Redirect(target_id);
@@ -494,7 +505,7 @@ impl ExecutorImpl {
                         format!("{}{}", left.to_str(), right.to_str())
                     };
                     let new_value = self.get_object_pool_mut().allocate(
-                        Box::new(primitive::StringObject::new(new_value))
+                        Box::new(new_value)
                     );
 
                     self.get_current_frame().push_exec(Value::Object(
@@ -528,7 +539,7 @@ impl ExecutorImpl {
                         self.get_object_pool()
                     ).to_str().to_string();
                     let value = self.get_object_pool_mut().allocate(
-                        Box::new(primitive::StringObject::new(value))
+                        Box::new(value)
                     );
                     self.get_current_frame().push_exec(Value::Object(value));
                 },
@@ -721,7 +732,7 @@ impl ExecutorImpl {
         );
 
         self.stack.push(frame);
-        let ret = catch_unwind(AssertUnwindSafe(|| self.invoke(callable_obj_id, new_this, &[])));
+        let ret = catch_unwind(AssertUnwindSafe(|| self.invoke(callable_obj_id, new_this, None, &[])));
         self.stack.pop();
 
         match ret {

@@ -3,11 +3,7 @@ use std::cmp::Ordering;
 use object::Object;
 use value::ValueContext;
 
-pub struct StringObject {
-    value: String
-}
-
-impl Object for StringObject {
+impl Object for String {
     fn get_children(&self) -> Vec<usize> {
         Vec::new()
     }
@@ -25,16 +21,16 @@ impl Object for StringObject {
     }
 
     fn to_str(&self) -> &str {
-        self.value.as_str()
+        self.as_str()
     }
 
     fn to_bool(&self) -> bool {
-        self.value == ""
+        *self == ""
     }
 
     fn test_eq(&self, other: &ValueContext) -> bool {
         if let Some(other) = other.as_object_direct().as_any().downcast_ref::<Self>() {
-            other.value == self.value
+            *other == *self
         } else {
             false
         }
@@ -42,17 +38,9 @@ impl Object for StringObject {
 
     fn compare(&self, other: &ValueContext) -> Option<Ordering> {
         if let Some(other) = other.as_object_direct().as_any().downcast_ref::<Self>() {
-            self.value.partial_cmp(&other.value)
+            self.partial_cmp(&other)
         } else {
             None
-        }
-    }
-}
-
-impl StringObject {
-    pub fn new<T: ToString>(value: T) -> StringObject {
-        StringObject {
-            value: value.to_string()
         }
     }
 }

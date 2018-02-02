@@ -14,6 +14,26 @@ pub enum Value {
     Float(f64)
 }
 
+impl Value {
+    pub fn is_object(&self) -> bool {
+        if let Value::Object(_) = *self {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn as_object_id(&self) -> usize {
+        if let Value::Object(obj) = *self {
+            obj
+        } else {
+            panic!(errors::VMError::from(errors::RuntimeError::new(
+                format!("Not an object: {:?}", self)
+            )));
+        }
+    }
+}
+
 pub struct ValueContext<'a, 'b> {
     pub value: &'a Value,
     pub pool: &'b ObjectPool
@@ -27,14 +47,12 @@ impl<'a, 'b> ValueContext<'a, 'b> {
         }
     }
 
+    pub fn is_object(&self) -> bool {
+        self.value.is_object()
+    }
+
     pub fn as_object_id(&self) -> usize {
-        if let Value::Object(obj) = *self.value {
-            obj
-        } else {
-            panic!(errors::VMError::from(errors::RuntimeError::new(
-                format!("Not an object: {:?}", self.value)
-            )));
-        }
+        self.value.as_object_id()
     }
 
     pub fn as_object<'z>(&self) -> ObjectHandle<'z> {

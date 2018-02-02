@@ -24,8 +24,8 @@ pub enum OpCode {
     SetStatic,
     GetField,
     SetField,
-    CreateObject,
     Call(usize),
+    CallField(usize),
     Branch(usize),
     ConditionalBranch(usize, usize),
     Return,
@@ -86,7 +86,6 @@ impl OpCode {
             SetStatic => (2, 0), // pops name & object
             GetField => (2, 1), // pops target object & key, pushes object
             SetField => (3, 0), // pops target object & key & value
-            CreateObject => (1, 1), // pops the prototype object, pushes the created object
             Branch(_) => (0, 0),
             ConditionalBranch(_, _) => (1, 0), // pops condition
             Return => (1, 0), // pops retval,
@@ -100,6 +99,7 @@ impl OpCode {
             And | Or => (2, 1), // pops the two operands, pushes the result
             TestLt | TestLe | TestEq | TestNe | TestGe | TestGt => (2, 1), // pops the two operands, pushes the result
             Call(n_args) => (n_args + 2, 1), // pops target & this & arguments, pushes the result
+            CallField(n_args) => (n_args + 3, 1), // pops target & this & field_name & arguments, pushes the result
             Rt(_) => panic!("Unexpected runtime opcode")
         }
     }

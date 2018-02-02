@@ -11,10 +11,10 @@ extern crate serde_derive;
 extern crate bincode;
 
 pub mod hybrid;
+pub mod builtin;
 
 pub mod basic_block;
 pub mod call_stack;
-pub mod dynamic_object;
 pub mod dynamic_trait;
 pub mod errors;
 pub mod executor;
