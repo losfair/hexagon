@@ -16,6 +16,8 @@ pub enum OpCode {
     InitLocal(usize),
     GetLocal(usize),
     SetLocal(usize),
+    GetLocalIndirect,
+    SetLocalIndirect,
     GetArgument(usize),
     GetNArguments,
     GetStatic,
@@ -27,6 +29,7 @@ pub enum OpCode {
     Branch(usize),
     ConditionalBranch(usize, usize),
     Return,
+    Add,
     IntAdd,
     IntSub,
     IntMul,
@@ -44,6 +47,8 @@ pub enum OpCode {
     CastToInt,
     CastToBool,
     CastToString,
+    And,
+    Or,
     Not,
     TestLt,
     TestLe,
@@ -73,6 +78,8 @@ impl OpCode {
             InitLocal(_) => (0, 0),
             GetLocal(_) => (0, 1), // pushes object
             SetLocal(_) => (1, 0), // pops object
+            GetLocalIndirect => (1, 1), // pops index, pushes object
+            SetLocalIndirect => (2, 0), // pops index & object
             GetArgument(_) => (0, 1), // pushes the argument
             GetNArguments => (0, 1), // pushes n_arguments
             GetStatic => (1, 1), // pops name, pushes object
@@ -83,12 +90,14 @@ impl OpCode {
             Branch(_) => (0, 0),
             ConditionalBranch(_, _) => (1, 0), // pops condition
             Return => (1, 0), // pops retval,
-            IntAdd | IntSub | IntMul | IntDiv | IntMod | IntPow
+            Add
+                | IntAdd | IntSub | IntMul | IntDiv | IntMod | IntPow
                 | FloatAdd | FloatSub | FloatMul | FloatDiv
                 | FloatPowi | FloatPowf
                 | StringAdd => (2, 1), // pops the two operands, pushes the result
             CastToFloat | CastToInt | CastToBool | CastToString => (1, 1),
             Not => (1, 1),
+            And | Or => (2, 1), // pops the two operands, pushes the result
             TestLt | TestLe | TestEq | TestNe | TestGe | TestGt => (2, 1), // pops the two operands, pushes the result
             Call(n_args) => (n_args + 2, 1), // pops target & this & arguments, pushes the result
             Rt(_) => panic!("Unexpected runtime opcode")

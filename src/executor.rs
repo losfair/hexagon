@@ -202,8 +202,26 @@ impl ExecutorImpl {
                 },
                 OpCode::SetLocal(ind) => {
                     let frame = self.get_current_frame();
-                    let obj_id = frame.pop_exec();
-                    frame.set_local(ind, obj_id);
+                    let value = frame.pop_exec();
+                    frame.set_local(ind, value);
+                },
+                OpCode::GetLocalIndirect => {
+                    let frame = self.get_current_frame();
+                    let ind = ValueContext::new(
+                        &frame.pop_exec(),
+                        self.get_object_pool()
+                    ).to_i64() as usize;
+                    let ret = frame.get_local(ind);
+                    frame.push_exec(ret);
+                },
+                OpCode::SetLocalIndirect => {
+                    let frame = self.get_current_frame();
+                    let ind = ValueContext::new(
+                        &frame.pop_exec(),
+                        self.get_object_pool()
+                    ).to_i64() as usize;
+                    let value = frame.pop_exec();
+                    frame.set_local(ind, value);
                 },
                 OpCode::GetArgument(ind) => {
                     let frame = self.get_current_frame();
@@ -311,6 +329,15 @@ impl ExecutorImpl {
                 OpCode::Return => {
                     let ret_val = self.get_current_frame().pop_exec();
                     return EvalControlMessage::Return(ret_val);
+                },
+                OpCode::Add => {
+                    let frame = self.get_current_frame();
+                    let (left, right) = (frame.pop_exec(), frame.pop_exec());
+                    self.get_current_frame().push_exec(
+                        ValueContext::new(&left, self.get_object_pool()).add(
+                            &ValueContext::new(&right, self.get_object_pool())
+                        )
+                    );
                 },
                 OpCode::IntAdd => {
                     let (left, right) = {
@@ -504,6 +531,36 @@ impl ExecutorImpl {
                         Box::new(primitive::StringObject::new(value))
                     );
                     self.get_current_frame().push_exec(Value::Object(value));
+                },
+                OpCode::And => {
+                    let frame = self.get_current_frame();
+                    let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+                    let left_ctx = ValueContext::new(
+                        &left,
+                        self.get_object_pool()
+                    );
+                    let right_ctx = ValueContext::new(
+                        &right,
+                        self.get_object_pool()
+                    );
+
+                    self.get_current_frame().push_exec(Value::Bool(left_ctx.to_bool() && right_ctx.to_bool()));
+                },
+                OpCode::Or => {
+                    let frame = self.get_current_frame();
+                    let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+                    let left_ctx = ValueContext::new(
+                        &left,
+                        self.get_object_pool()
+                    );
+                    let right_ctx = ValueContext::new(
+                        &right,
+                        self.get_object_pool()
+                    );
+
+                    self.get_current_frame().push_exec(Value::Bool(left_ctx.to_bool() || right_ctx.to_bool()));
                 },
                 OpCode::Not => {
                     let value = ValueContext::new(
