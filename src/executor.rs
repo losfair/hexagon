@@ -2,7 +2,7 @@ use std::cell::{Ref, RefMut, RefCell};
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::cmp::Ordering;
 use object::Object;
-use call_stack::{CallStack, Frame};
+use call_stack::{CallStack, FrameHandle};
 use opcode::{OpCode, RtOpCode};
 use errors;
 use basic_block::BasicBlock;
@@ -55,7 +55,7 @@ impl ExecutorImpl {
         ret
     }
 
-    pub fn get_current_frame<'a>(&self) -> &Frame {
+    pub fn get_current_frame<'a>(&self) -> &FrameHandle {
         self.stack.top()
     }
 
@@ -80,7 +80,8 @@ impl ExecutorImpl {
     }
 
     pub fn invoke(&mut self, callable_val: Value, this: Value, field_name: Option<&str>, args: &[Value]) {
-        let frame = Frame::with_arguments(this, args);
+        let mut frame = FrameHandle::new();
+        frame.init_with_arguments(this, args);
 
         // Push the callable object onto the execution stack
         // to prevent it from begin GC-ed.
@@ -736,7 +737,8 @@ impl ExecutorImpl {
 
         let new_this = Value::Null;
 
-        let frame = Frame::with_arguments(
+        let mut frame = FrameHandle::new();
+        frame.init_with_arguments(
             new_this,
             &[]
         );
