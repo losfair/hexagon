@@ -15,8 +15,8 @@ pub struct CallStack {
 pub struct Frame {
     this: Value,
     arguments: UnsafeCell<SmallVec<[Value; 4]>>,
-    locals: UnsafeCell<SmallVec<[Value; 16]>>,
-    exec_stack: UnsafeCell<SmallVec<[Value; 16]>>
+    locals: UnsafeCell<SmallVec<[Value; 8]>>,
+    exec_stack: UnsafeCell<SmallVec<[Value; 8]>>
 }
 
 impl CallStack {
