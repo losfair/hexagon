@@ -109,17 +109,6 @@ impl<'a, 'b> ValueContext<'a, 'b> {
         }
     }
 
-    // TODO: Implement object-specific operators.
-    pub fn add(&self, other: &ValueContext) -> Value {
-        match (*self.value, *other.value) {
-            (Value::Int(a), Value::Int(b)) => Value::Int(a + b),
-            (Value::Float(a), Value::Float(b)) => Value::Float(a + b),
-            (Value::Int(a), Value::Float(b)) => Value::Int(a + b as i64),
-            (Value::Float(a), Value::Int(b)) => Value::Float(a + b as f64),
-            _ => panic!(errors::VMError::from(errors::RuntimeError::new("Add operator not implemented")))
-        }
-    }
-
     pub fn compare(&self, other: &ValueContext) -> Option<Ordering> {
         if let Value::Object(_) = *self.value {
             return self.as_object_direct().compare(other);

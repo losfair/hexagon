@@ -331,15 +331,6 @@ impl ExecutorImpl {
                     let ret_val = self.get_current_frame().pop_exec();
                     return EvalControlMessage::Return(ret_val);
                 },
-                OpCode::Add => {
-                    let frame = self.get_current_frame();
-                    let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                    self.get_current_frame().push_exec(
-                        ValueContext::new(&left, self.get_object_pool()).add(
-                            &ValueContext::new(&right, self.get_object_pool())
-                        )
-                    );
-                },
                 OpCode::IntAdd => {
                     let (left, right) = {
                         let frame = self.get_current_frame();

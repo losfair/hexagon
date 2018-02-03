@@ -29,7 +29,6 @@ pub enum OpCode {
     Branch(usize),
     ConditionalBranch(usize, usize),
     Return,
-    Add,
     IntAdd,
     IntSub,
     IntMul,
@@ -91,8 +90,7 @@ impl OpCode {
             Branch(_) => (0, 0),
             ConditionalBranch(_, _) => (1, 0), // pops condition
             Return => (1, 0), // pops retval,
-            Add
-                | IntAdd | IntSub | IntMul | IntDiv | IntMod | IntPow
+            IntAdd | IntSub | IntMul | IntDiv | IntMod | IntPow
                 | FloatAdd | FloatSub | FloatMul | FloatDiv
                 | FloatPowi | FloatPowf
                 | StringAdd => (2, 1), // pops the two operands, pushes the result

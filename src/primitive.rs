@@ -1,7 +1,9 @@
 use std::any::Any;
 use std::cmp::Ordering;
 use object::Object;
-use value::ValueContext;
+use value::{Value, ValueContext};
+use executor::ExecutorImpl;
+use errors::{VMError, FieldNotFoundError};
 
 impl Object for String {
     fn get_children(&self) -> Vec<usize> {
@@ -41,6 +43,22 @@ impl Object for String {
             self.partial_cmp(&other)
         } else {
             None
+        }
+    }
+
+    fn call_field(&self, field_name: &str, executor: &mut ExecutorImpl) -> Value {
+        match field_name {
+            "__add__" => {
+                let right = executor.get_current_frame().must_get_argument(0);
+                let ret = ValueContext::new(&right, executor.get_object_pool()).to_str().to_string();
+
+                Value::Object(
+                    executor.get_object_pool_mut().allocate(
+                        Box::new(ret)
+                    )
+                )
+            },
+            _ => panic!(VMError::from(FieldNotFoundError::from_field_name(field_name)))
         }
     }
 }
