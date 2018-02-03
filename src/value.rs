@@ -122,6 +122,8 @@ impl<'a, 'b> ValueContext<'a, 'b> {
             (Value::Bool(a), Value::Bool(b)) => a.partial_cmp(&b),
             (Value::Int(a), Value::Int(b)) => a.partial_cmp(&b),
             (Value::Float(a), Value::Float(b)) => a.partial_cmp(&b),
+            (Value::Int(a), Value::Float(b)) => (a as f64).partial_cmp(&b),
+            (Value::Float(a), Value::Int(b)) => a.partial_cmp(&(b as f64)),
             _ => None
         }
     }
