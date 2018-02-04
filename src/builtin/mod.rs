@@ -6,6 +6,7 @@ use object::Object;
 use value::{Value, ValueContext};
 use executor::ExecutorImpl;
 use errors::{VMError, FieldNotFoundError};
+use generic_arithmetic;
 
 pub struct BuiltinObject {
 
@@ -49,114 +50,19 @@ impl Object for BuiltinObject {
                 ))
             },
             "add" => {
-                let left = executor.get_current_frame().must_get_argument(0);
-                let right = executor.get_current_frame().must_get_argument(1);
-
-                match left {
-                    Value::Object(_) => {
-                        executor.invoke(left, Value::Null, Some("__add__"), &[right]);
-                        executor.get_current_frame().pop_exec()
-                    },
-                    Value::Int(v) => {
-                        Value::Int(
-                            v + ValueContext::new(&right, executor.get_object_pool()).to_i64()
-                        )
-                    },
-                    Value::Float(v) => {
-                        Value::Float(
-                            v + ValueContext::new(&right, executor.get_object_pool()).to_f64()
-                        )
-                    },
-                    _ => panic!(VMError::from("Invalid operation"))
-                }
+                generic_arithmetic::exec_add(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
             },
             "sub" => {
-                let left = executor.get_current_frame().must_get_argument(0);
-                let right = executor.get_current_frame().must_get_argument(1);
-
-                match left {
-                    Value::Object(_) => {
-                        executor.invoke(left, Value::Null, Some("__sub__"), &[right]);
-                        executor.get_current_frame().pop_exec()
-                    },
-                    Value::Int(v) => {
-                        Value::Int(
-                            v - ValueContext::new(&right, executor.get_object_pool()).to_i64()
-                        )
-                    },
-                    Value::Float(v) => {
-                        Value::Float(
-                            v - ValueContext::new(&right, executor.get_object_pool()).to_f64()
-                        )
-                    },
-                    _ => panic!(VMError::from("Invalid operation"))
-                }
+                generic_arithmetic::exec_sub(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
             },
             "mul" => {
-                let left = executor.get_current_frame().must_get_argument(0);
-                let right = executor.get_current_frame().must_get_argument(1);
-
-                match left {
-                    Value::Object(_) => {
-                        executor.invoke(left, Value::Null, Some("__mul__"), &[right]);
-                        executor.get_current_frame().pop_exec()
-                    },
-                    Value::Int(v) => {
-                        Value::Int(
-                            v * ValueContext::new(&right, executor.get_object_pool()).to_i64()
-                        )
-                    },
-                    Value::Float(v) => {
-                        Value::Float(
-                            v * ValueContext::new(&right, executor.get_object_pool()).to_f64()
-                        )
-                    },
-                    _ => panic!(VMError::from("Invalid operation"))
-                }
+                generic_arithmetic::exec_mul(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
             },
             "div" => {
-                let left = executor.get_current_frame().must_get_argument(0);
-                let right = executor.get_current_frame().must_get_argument(1);
-
-                match left {
-                    Value::Object(_) => {
-                        executor.invoke(left, Value::Null, Some("__div__"), &[right]);
-                        executor.get_current_frame().pop_exec()
-                    },
-                    Value::Int(v) => {
-                        Value::Int(
-                            v / ValueContext::new(&right, executor.get_object_pool()).to_i64()
-                        )
-                    },
-                    Value::Float(v) => {
-                        Value::Float(
-                            v / ValueContext::new(&right, executor.get_object_pool()).to_f64()
-                        )
-                    },
-                    _ => panic!(VMError::from("Invalid operation"))
-                }
+                generic_arithmetic::exec_div(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
             },
             "mod" => {
-                let left = executor.get_current_frame().must_get_argument(0);
-                let right = executor.get_current_frame().must_get_argument(1);
-
-                match left {
-                    Value::Object(_) => {
-                        executor.invoke(left, Value::Null, Some("__mod__"), &[right]);
-                        executor.get_current_frame().pop_exec()
-                    },
-                    Value::Int(v) => {
-                        Value::Int(
-                            v % ValueContext::new(&right, executor.get_object_pool()).to_i64()
-                        )
-                    },
-                    Value::Float(v) => {
-                        Value::Float(
-                            v % ValueContext::new(&right, executor.get_object_pool()).to_f64()
-                        )
-                    },
-                    _ => panic!(VMError::from("Invalid operation"))
-                }
+                generic_arithmetic::exec_mod(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
             },
             _ => panic!(VMError::from(FieldNotFoundError::from_field_name(name)))
         }

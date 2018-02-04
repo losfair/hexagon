@@ -11,6 +11,7 @@ use smallvec::SmallVec;
 use hybrid::executor::Executor as HybridExecutor;
 use value::{Value, ValueContext};
 use builtin::BuiltinObject;
+use generic_arithmetic;
 
 pub struct Executor {
     inner: RefCell<ExecutorImpl>
@@ -330,6 +331,26 @@ impl ExecutorImpl {
                 OpCode::Return => {
                     let ret_val = self.get_current_frame().pop_exec();
                     return EvalControlMessage::Return(ret_val);
+                },
+                OpCode::Add => {
+                    let ret = generic_arithmetic::exec_add(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                    self.get_current_frame().push_exec(ret);
+                },
+                OpCode::Sub => {
+                    let ret = generic_arithmetic::exec_sub(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                    self.get_current_frame().push_exec(ret);
+                },
+                OpCode::Mul => {
+                    let ret = generic_arithmetic::exec_mul(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                    self.get_current_frame().push_exec(ret);
+                },
+                OpCode::Div => {
+                    let ret = generic_arithmetic::exec_div(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                    self.get_current_frame().push_exec(ret);
+                },
+                OpCode::Mod => {
+                    let ret = generic_arithmetic::exec_mod(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                    self.get_current_frame().push_exec(ret);
                 },
                 OpCode::IntAdd => {
                     let (left, right) = {
