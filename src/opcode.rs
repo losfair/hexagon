@@ -16,8 +16,6 @@ pub enum OpCode {
     InitLocal(usize),
     GetLocal(usize),
     SetLocal(usize),
-    GetLocalIndirect,
-    SetLocalIndirect,
     GetArgument(usize),
     GetNArguments,
     GetStatic,
@@ -84,8 +82,6 @@ impl OpCode {
             InitLocal(_) => (0, 0),
             GetLocal(_) => (0, 1), // pushes object
             SetLocal(_) => (1, 0), // pops object
-            GetLocalIndirect => (1, 1), // pops index, pushes object
-            SetLocalIndirect => (2, 0), // pops index & object
             GetArgument(_) => (0, 1), // pushes the argument
             GetNArguments => (0, 1), // pushes n_arguments
             GetStatic => (1, 1), // pops name, pushes object

@@ -218,24 +218,6 @@ impl ExecutorImpl {
                     let value = frame.pop_exec();
                     frame.set_local(ind, value);
                 },
-                OpCode::GetLocalIndirect => {
-                    let frame = self.get_current_frame();
-                    let ind = ValueContext::new(
-                        &frame.pop_exec(),
-                        self.get_object_pool()
-                    ).to_i64() as usize;
-                    let ret = frame.get_local(ind);
-                    frame.push_exec(ret);
-                },
-                OpCode::SetLocalIndirect => {
-                    let frame = self.get_current_frame();
-                    let ind = ValueContext::new(
-                        &frame.pop_exec(),
-                        self.get_object_pool()
-                    ).to_i64() as usize;
-                    let value = frame.pop_exec();
-                    frame.set_local(ind, value);
-                },
                 OpCode::GetArgument(ind) => {
                     let frame = self.get_current_frame();
                     frame.push_exec(frame.must_get_argument(ind));
