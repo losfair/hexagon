@@ -32,6 +32,7 @@ pub enum OpCode {
     Mul,
     Div,
     Mod,
+    Pow,
     IntAdd,
     IntSub,
     IntMul,
@@ -92,7 +93,7 @@ impl OpCode {
             Branch(_) => (0, 0),
             ConditionalBranch(_, _) => (1, 0), // pops condition
             Return => (1, 0), // pops retval,
-            Add | Sub | Mul | Div | Mod
+            Add | Sub | Mul | Div | Mod | Pow
                 | IntAdd | IntSub | IntMul | IntDiv | IntMod | IntPow
                 | FloatAdd | FloatSub | FloatMul | FloatDiv
                 | FloatPowi | FloatPowf

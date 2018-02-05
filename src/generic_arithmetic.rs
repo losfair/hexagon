@@ -101,3 +101,23 @@ pub fn exec_mod(executor: &mut ExecutorImpl, left: Value, right: Value) -> Value
         _ => panic!(VMError::from("Invalid operation"))
     }
 }
+
+pub fn exec_pow(executor: &mut ExecutorImpl, left: Value, right: Value) -> Value {
+    match left {
+        Value::Object(_) => {
+            executor.invoke(left, Value::Null, Some("__pow__"), &[right]);
+            executor.get_current_frame().pop_exec()
+        },
+        Value::Int(v) => {
+            Value::Float(
+                (v as f64).powf(ValueContext::new(&right, executor.get_object_pool()).to_f64())
+            )
+        },
+        Value::Float(v) => {
+            Value::Float(
+                v.powf(ValueContext::new(&right, executor.get_object_pool()).to_f64())
+            )
+        },
+        _ => panic!(VMError::from("Invalid operation"))
+    }
+}

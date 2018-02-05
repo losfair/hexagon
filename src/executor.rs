@@ -334,6 +334,10 @@ impl ExecutorImpl {
                     let ret = generic_arithmetic::exec_mod(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
                     self.get_current_frame().push_exec(ret);
                 },
+                OpCode::Pow => {
+                    let ret = generic_arithmetic::exec_pow(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                    self.get_current_frame().push_exec(ret);
+                },
                 OpCode::IntAdd => {
                     let (left, right) = {
                         let frame = self.get_current_frame();

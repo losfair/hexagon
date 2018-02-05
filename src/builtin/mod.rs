@@ -64,6 +64,9 @@ impl Object for BuiltinObject {
             "mod" => {
                 generic_arithmetic::exec_mod(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
             },
+            "pow" => {
+                generic_arithmetic::exec_pow(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
+            },
             _ => panic!(VMError::from(FieldNotFoundError::from_field_name(name)))
         }
     }
