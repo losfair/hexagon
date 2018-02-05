@@ -1,3 +1,5 @@
+use smallvec::SmallVec;
+
 /// Hexagon VM opcodes.
 ///
 /// Note that the `Rt` variant is only meant to be used internally
@@ -69,7 +71,14 @@ pub enum OpCode {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum RtOpCode {
-    LoadObject(usize)
+    LoadObject(usize),
+    StackMap(StackMapPattern)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct StackMapPattern {
+    pub(crate) map: SmallVec<[isize; 4]>,
+    pub(crate) end_state: isize
 }
 
 impl OpCode {
@@ -108,7 +117,12 @@ impl OpCode {
             Rotate3 => (3, 3),
             RotateReverse(n) => (n, n),
             Rt(ref op) => match *op {
-                RtOpCode::LoadObject(_) => (0, 1) // pushes the object at id
+                RtOpCode::LoadObject(_) => (0, 1), // pushes the object at id
+                RtOpCode::StackMap(ref p) => if p.end_state >= 0 {
+                    (0, p.end_state as usize)
+                } else {
+                    ((-p.end_state) as usize, 0)
+                }
             }
         }
     }

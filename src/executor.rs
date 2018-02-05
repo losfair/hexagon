@@ -722,6 +722,9 @@ impl ExecutorImpl {
                     match *op {
                         RtOpCode::LoadObject(id) => {
                             self.get_current_frame().push_exec(Value::Object(id));
+                        },
+                        RtOpCode::StackMap(ref map) => {
+                            self.get_current_frame().map_exec(map);
                         }
                     }
                 }

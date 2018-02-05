@@ -21,6 +21,9 @@ impl<'a> FunctionOptimizer<'a> {
 
     pub fn optimize(&mut self) {
         self.optimize_const_static_load();
+        for bb in self.basic_blocks.iter_mut() {
+            bb.rebuild_stack_patterns();
+        }
     }
 
     pub fn optimize_const_static_load(&mut self) {

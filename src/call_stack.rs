@@ -5,6 +5,7 @@ use std::ops::{Deref, DerefMut};
 use smallvec::SmallVec;
 use errors;
 use value::Value;
+use opcode::StackMapPattern;
 
 thread_local! {
     static FRAME_POOL: RefCell<FramePool> = RefCell::new(FramePool::new(128));
@@ -197,6 +198,27 @@ impl Frame {
 
         let last = stack[stack.len() - 1].clone();
         stack.push(last);
+    }
+
+    pub fn map_exec(&self, p: &StackMapPattern) {
+        let stack = unsafe { &mut *self.exec_stack.get() };
+
+        let center = stack.len() - 1;
+        let new_values: SmallVec<[Value; 4]> = p.map.iter().map(|dt| stack[(center as isize + dt) as usize]).collect();
+
+        if p.end_state < 0 {
+            for _ in 0..(-p.end_state) {
+                stack.pop().unwrap();
+            }
+        } else {
+            for _ in 0..p.end_state {
+                stack.push(Value::Null);
+            }
+        }
+
+        for i in 0..new_values.len() {
+            stack[stack.len() - 1 - i] = new_values[new_values.len() - 1 - i];
+        }
     }
 
     pub fn reset_locals(&self, n_slots: usize) {
