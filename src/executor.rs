@@ -694,6 +694,26 @@ impl ExecutorImpl {
                     frame.push_exec(a);
                     frame.push_exec(c);
                 },
+                OpCode::RotateReverse(n) => {
+                    let frame = self.get_current_frame();
+                    if n <= 4 {
+                        let mut t = [Value::Null; 4];
+                        for i in 0..n {
+                            t[i] = frame.pop_exec();
+                        }
+                        for i in 0..n {
+                            frame.push_exec(t[i]);
+                        }
+                    } else {
+                        let mut t = Vec::with_capacity(n);
+                        for i in 0..n {
+                            t.push(frame.pop_exec());
+                        }
+                        for i in 0..n {
+                            frame.push_exec(t[i]);
+                        }
+                    }
+                },
                 OpCode::Rt(ref op) => {
                     match *op {
                         RtOpCode::LoadObject(id) => {

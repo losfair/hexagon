@@ -60,6 +60,7 @@ pub enum OpCode {
     TestGt,
     Rotate2,
     Rotate3,
+    RotateReverse(usize),
 
     #[serde(skip_serializing, skip_deserializing)]
     Rt(RtOpCode)
@@ -104,6 +105,7 @@ impl OpCode {
             CallField(n_args) => (n_args + 3, 1), // pops target & this & field_name & arguments, pushes the result
             Rotate2 => (2, 2),
             Rotate3 => (3, 3),
+            RotateReverse(n) => (n, n),
             Rt(ref op) => match *op {
                 RtOpCode::LoadObject(_) => (0, 1) // pushes the object at id
             }
