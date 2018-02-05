@@ -22,6 +22,20 @@ impl Object for String {
         self as &mut Any
     }
 
+    fn to_i64(&self) -> i64 {
+        match self.as_str().parse::<i64>() {
+            Ok(v) => v,
+            Err(_) => panic!(VMError::from("Cannot parse as i64"))
+        }
+    }
+
+    fn to_f64(&self) -> f64 {
+        match self.as_str().parse::<f64>() {
+            Ok(v) => v,
+            Err(_) => panic!(VMError::from("Cannot parse as f64"))
+        }
+    }
+
     fn to_str(&self) -> &str {
         self.as_str()
     }
