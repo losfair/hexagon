@@ -9,8 +9,8 @@ pub fn exec_add(executor: &mut ExecutorImpl, left: Value, right: Value) -> Value
             executor.get_current_frame().pop_exec()
         },
         Value::Int(v) => {
-            Value::Int(
-                v + ValueContext::new(&right, executor.get_object_pool()).to_i64()
+            Value::Float(
+                (v as f64) + ValueContext::new(&right, executor.get_object_pool()).to_f64()
             )
         },
         Value::Float(v) => {
@@ -29,8 +29,8 @@ pub fn exec_sub(executor: &mut ExecutorImpl, left: Value, right: Value) -> Value
             executor.get_current_frame().pop_exec()
         },
         Value::Int(v) => {
-            Value::Int(
-                v - ValueContext::new(&right, executor.get_object_pool()).to_i64()
+            Value::Float(
+                (v as f64) - ValueContext::new(&right, executor.get_object_pool()).to_f64()
             )
         },
         Value::Float(v) => {
@@ -49,8 +49,8 @@ pub fn exec_mul(executor: &mut ExecutorImpl, left: Value, right: Value) -> Value
             executor.get_current_frame().pop_exec()
         },
         Value::Int(v) => {
-            Value::Int(
-                v * ValueContext::new(&right, executor.get_object_pool()).to_i64()
+            Value::Float(
+                (v as f64) * ValueContext::new(&right, executor.get_object_pool()).to_f64()
             )
         },
         Value::Float(v) => {
@@ -69,8 +69,8 @@ pub fn exec_div(executor: &mut ExecutorImpl, left: Value, right: Value) -> Value
             executor.get_current_frame().pop_exec()
         },
         Value::Int(v) => {
-            Value::Int(
-                v / ValueContext::new(&right, executor.get_object_pool()).to_i64()
+            Value::Float(
+                (v as f64) / ValueContext::new(&right, executor.get_object_pool()).to_f64()
             )
         },
         Value::Float(v) => {
@@ -89,8 +89,8 @@ pub fn exec_mod(executor: &mut ExecutorImpl, left: Value, right: Value) -> Value
             executor.get_current_frame().pop_exec()
         },
         Value::Int(v) => {
-            Value::Int(
-                v % ValueContext::new(&right, executor.get_object_pool()).to_i64()
+            Value::Float(
+                (v as f64) % ValueContext::new(&right, executor.get_object_pool()).to_f64()
             )
         },
         Value::Float(v) => {
