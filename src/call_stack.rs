@@ -179,10 +179,12 @@ impl Frame {
         }
     }
 
+    #[inline]
     pub fn push_exec(&self, obj: Value) {
         unsafe { &mut *self.exec_stack.get() }.push(obj);
     }
 
+    #[inline]
     pub fn pop_exec(&self) -> Value {
         match unsafe { &mut *self.exec_stack.get() }.pop() {
             Some(v) => v,
@@ -190,6 +192,7 @@ impl Frame {
         }
     }
 
+    #[inline]
     pub fn dup_exec(&self) {
         let stack = unsafe { &mut *self.exec_stack.get() };
         if stack.is_empty() {
@@ -229,6 +232,7 @@ impl Frame {
         }
     }
 
+    #[inline]
     pub fn get_local(&self, ind: usize) -> Value {
         let locals = unsafe { &*self.locals.get() };
         if ind >= locals.len() {
@@ -238,6 +242,7 @@ impl Frame {
         (*locals)[ind]
     }
 
+    #[inline]
     pub fn set_local(&self, ind: usize, obj: Value) {
         let locals = unsafe { &mut *self.locals.get() };
         if ind >= locals.len() {
@@ -247,6 +252,7 @@ impl Frame {
         (*locals)[ind] = obj;
     }
 
+    #[inline]
     pub fn get_argument(&self, id: usize) -> Option<Value> {
         let args = unsafe { &*self.arguments.get() };
         if id < args.len() {
@@ -256,16 +262,19 @@ impl Frame {
         }
     }
 
+    #[inline]
     pub fn must_get_argument(&self, id: usize) -> Value {
         self.get_argument(id).unwrap_or_else(|| {
             panic!(errors::VMError::from(errors::RuntimeError::new("Argument index out of bound")))
         })
     }
 
+    #[inline]
     pub fn get_n_arguments(&self) -> usize {
         unsafe { &*self.arguments.get() }.len()
     }
 
+    #[inline]
     pub fn get_this(&self) -> Value {
         self.this
     }

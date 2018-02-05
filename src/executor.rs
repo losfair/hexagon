@@ -56,14 +56,17 @@ impl ExecutorImpl {
         ret
     }
 
+    #[inline]
     pub fn get_current_frame<'a>(&self) -> &FrameHandle {
         self.stack.top()
     }
 
+    #[inline]
     pub fn get_object_pool(&self) -> &ObjectPool {
         &self.object_pool
     }
 
+    #[inline]
     pub fn get_object_pool_mut(&mut self) -> &mut ObjectPool {
         &mut self.object_pool
     }
@@ -134,17 +137,523 @@ impl ExecutorImpl {
         self.get_object_pool().get_static_object(key)
     }
 
-    fn eval_basic_blocks_impl(&mut self, basic_blocks: &[BasicBlock], basic_block_id: usize) -> EvalControlMessage {
-        if basic_block_id >= basic_blocks.len() {
-            panic!(errors::VMError::from(errors::RuntimeError::new("Basic block id out of bound")));
-        }
+    fn _call_impl(&mut self, n_args: usize) {
+        let (target, this, args) = {
+            let frame = self.get_current_frame();
 
+            let target = frame.pop_exec();
+            let this = frame.pop_exec();
+
+            let args: SmallVec<[Value; 4]> = (0..n_args)
+                .map(|_| frame.pop_exec())
+                .collect();
+
+            (target, this, args)
+        };
+        self.invoke(target, this, None, args.as_slice());
+    }
+
+    fn _call_field_impl(&mut self, n_args: usize) {
+        let (target, this, field_name, args) = {
+            let frame = self.get_current_frame();
+
+            let target = frame.pop_exec();
+            let this = frame.pop_exec();
+            let field_name = frame.pop_exec();
+
+            let args: SmallVec<[Value; 4]> = (0..n_args)
+                .map(|_| frame.pop_exec())
+                .collect();
+
+            (target, this, field_name, args)
+        };
+        let field_name = ValueContext::new(&field_name, self.get_object_pool()).to_str().to_string();
+        self.invoke(target, this, Some(field_name.as_str()), args.as_slice());
+    }
+
+    fn _get_field_impl(&mut self) {
+        let target_obj_val = self.get_current_frame().pop_exec();
+        let target_obj = ValueContext::new(
+            &target_obj_val,
+            self.get_object_pool()
+        ).as_object_direct();
+
+        let key_val = self.get_current_frame().pop_exec();
+        let key = ValueContext::new(
+            &key_val,
+            self.get_object_pool()
+        ).as_object_direct().to_str();
+
+        if let Some(v) = target_obj.get_field(self.get_object_pool(), key) {
+            self.get_current_frame().push_exec(v);
+        } else {
+            self.get_current_frame().push_exec(Value::Null);
+        }
+    }
+
+    fn _set_field_impl(&mut self) {
+        let (target_obj_val, key_val, value) = {
+            let frame = self.get_current_frame();
+            (
+                frame.pop_exec(),
+                frame.pop_exec(),
+                frame.pop_exec()
+            )
+        };
+
+        let target_obj = ValueContext::new(
+            &target_obj_val,
+            self.get_object_pool()
+        ).as_object_direct();
+
+        let key = ValueContext::new(
+            &key_val,
+            self.get_object_pool()
+        ).as_object_direct().to_str();
+
+        target_obj.set_field(key, value);
+    }
+
+    fn _int_add_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                ValueContext::new(&right, self.get_object_pool()).to_i64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Int(left + right));
+    }
+
+    fn _int_sub_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                ValueContext::new(&right, self.get_object_pool()).to_i64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Int(left - right));
+    }
+
+    fn _int_mul_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                ValueContext::new(&right, self.get_object_pool()).to_i64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Int(left * right));
+    }
+
+    fn _int_div_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                ValueContext::new(&right, self.get_object_pool()).to_i64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Int(left / right));
+    }
+
+    fn _int_mod_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                ValueContext::new(&right, self.get_object_pool()).to_i64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Int(left % right));
+    }
+
+    fn _int_pow_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_i64(),
+                ValueContext::new(&right, self.get_object_pool()).to_i64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Int(left.pow(right as u32)));
+    }
+
+    fn _float_add_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                ValueContext::new(&right, self.get_object_pool()).to_f64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Float(left + right));
+    }
+
+    fn _float_sub_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                ValueContext::new(&right, self.get_object_pool()).to_f64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Float(left - right));
+    }
+
+    fn _float_mul_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                ValueContext::new(&right, self.get_object_pool()).to_f64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Float(left * right));
+    }
+
+    fn _float_div_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                ValueContext::new(&right, self.get_object_pool()).to_f64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Float(left / right));
+    }
+
+    fn _float_mod_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                ValueContext::new(&right, self.get_object_pool()).to_f64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Float(left % right));
+    }
+
+    fn _float_powi_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                ValueContext::new(&right, self.get_object_pool()).to_i64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Float(left.powi(right as i32)));
+    }
+
+    fn _float_powf_impl(&mut self) {
+        let (left, right) = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            (
+                ValueContext::new(&left, self.get_object_pool()).to_f64(),
+                ValueContext::new(&right, self.get_object_pool()).to_f64(),
+            )
+        };
+
+        self.get_current_frame().push_exec(Value::Float(left.powf(right)));
+    }
+
+    fn _string_add_impl(&mut self) {
+        let new_value = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+            let (left, right) = (
+                ValueContext::new(&left, self.get_object_pool()),
+                ValueContext::new(&right, self.get_object_pool())
+            );
+            format!("{}{}", left.to_str(), right.to_str())
+        };
+        let new_value = self.get_object_pool_mut().allocate(
+            Box::new(new_value)
+        );
+
+        self.get_current_frame().push_exec(Value::Object(
+            new_value
+        ));
+    }
+
+    fn _cast_to_float_impl(&mut self) {
+        let value = ValueContext::new(
+            &self.get_current_frame().pop_exec(),
+            self.get_object_pool()
+        ).to_f64();
+        self.get_current_frame().push_exec(Value::Float(value));
+    }
+
+    fn _cast_to_int_impl(&mut self) {
+        let value = ValueContext::new(
+            &self.get_current_frame().pop_exec(),
+            self.get_object_pool()
+        ).to_i64();
+        self.get_current_frame().push_exec(Value::Int(value));
+    }
+
+    fn _cast_to_bool_impl(&mut self) {
+        let value = ValueContext::new(
+            &self.get_current_frame().pop_exec(),
+            self.get_object_pool()
+        ).to_bool();
+        self.get_current_frame().push_exec(Value::Bool(value));
+    }
+
+    fn _cast_to_string_impl(&mut self) {
+        let value = ValueContext::new(
+            &self.get_current_frame().pop_exec(),
+            self.get_object_pool()
+        ).to_str().to_string();
+        let value = self.get_object_pool_mut().allocate(
+            Box::new(value)
+        );
+        self.get_current_frame().push_exec(Value::Object(value));
+    }
+
+    fn _and_impl(&mut self) {
+        let frame = self.get_current_frame();
+        let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+        let left_ctx = ValueContext::new(
+            &left,
+            self.get_object_pool()
+        );
+        let right_ctx = ValueContext::new(
+            &right,
+            self.get_object_pool()
+        );
+
+        self.get_current_frame().push_exec(Value::Bool(left_ctx.to_bool() && right_ctx.to_bool()));
+    }
+
+    fn _or_impl(&mut self) {
+        let frame = self.get_current_frame();
+        let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+        let left_ctx = ValueContext::new(
+            &left,
+            self.get_object_pool()
+        );
+        let right_ctx = ValueContext::new(
+            &right,
+            self.get_object_pool()
+        );
+
+        self.get_current_frame().push_exec(Value::Bool(left_ctx.to_bool() || right_ctx.to_bool()));
+    }
+
+    fn _not_impl(&mut self) {
+        let value = ValueContext::new(
+            &self.get_current_frame().pop_exec(),
+            self.get_object_pool()
+        ).to_bool();
+        self.get_current_frame().push_exec(Value::Bool(!value));
+    }
+
+    fn _test_lt_impl(&mut self) {
+        let ord = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+            let left_ctx = ValueContext::new(
+                &left,
+                self.get_object_pool()
+            );
+            let right_ctx = ValueContext::new(
+                &right,
+                self.get_object_pool()
+            );
+            left_ctx.compare(&right_ctx)
+        };
+
+        self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Less)));
+    }
+
+    fn _test_le_impl(&mut self) {
+        let ord = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+            let left_ctx = ValueContext::new(
+                &left,
+                self.get_object_pool()
+            );
+            let right_ctx = ValueContext::new(
+                &right,
+                self.get_object_pool()
+            );
+            left_ctx.compare(&right_ctx)
+        };
+
+        self.get_current_frame().push_exec(Value::Bool(
+            ord == Some(Ordering::Less) || ord == Some(Ordering::Equal)
+        ));
+    }
+
+    fn _test_eq_impl(&mut self) {
+        let ord = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+            let left_ctx = ValueContext::new(
+                &left,
+                self.get_object_pool()
+            );
+            let right_ctx = ValueContext::new(
+                &right,
+                self.get_object_pool()
+            );
+            left_ctx.compare(&right_ctx)
+        };
+
+        self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Equal)));
+    }
+
+    fn _test_ne_impl(&mut self) {
+        let ord = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+            let left_ctx = ValueContext::new(
+                &left,
+                self.get_object_pool()
+            );
+            let right_ctx = ValueContext::new(
+                &right,
+                self.get_object_pool()
+            );
+            left_ctx.compare(&right_ctx)
+        };
+
+        self.get_current_frame().push_exec(Value::Bool(ord != Some(Ordering::Equal)));
+    }
+
+    fn _test_ge_impl(&mut self) {
+        let ord = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+            let left_ctx = ValueContext::new(
+                &left,
+                self.get_object_pool()
+            );
+            let right_ctx = ValueContext::new(
+                &right,
+                self.get_object_pool()
+            );
+            left_ctx.compare(&right_ctx)
+        };
+
+        self.get_current_frame().push_exec(Value::Bool(
+            ord == Some(Ordering::Greater) || ord == Some(Ordering::Equal)
+        ));
+    }
+
+    fn _test_gt_impl(&mut self) {
+        let ord = {
+            let frame = self.get_current_frame();
+            let (left, right) = (frame.pop_exec(), frame.pop_exec());
+
+            let left_ctx = ValueContext::new(
+                &left,
+                self.get_object_pool()
+            );
+            let right_ctx = ValueContext::new(
+                &right,
+                self.get_object_pool()
+            );
+            left_ctx.compare(&right_ctx)
+        };
+
+        self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Greater)));
+    }
+
+    fn _rotate2_impl(&mut self) {
+        let frame = self.get_current_frame();
+        let a = frame.pop_exec();
+        let b = frame.pop_exec();
+
+        frame.push_exec(a);
+        frame.push_exec(b);
+    }
+
+    fn _rotate3_impl(&mut self) {
+        let frame = self.get_current_frame();
+        let a = frame.pop_exec();
+        let b = frame.pop_exec();
+        let c = frame.pop_exec();
+
+        frame.push_exec(b);
+        frame.push_exec(a);
+        frame.push_exec(c);
+    }
+
+    fn _rotate_reverse_impl(&mut self, n: usize) {
+        let frame = self.get_current_frame();
+        if n <= 4 {
+            let mut t = [Value::Null; 4];
+            for i in 0..n {
+                t[i] = frame.pop_exec();
+            }
+            for i in 0..n {
+                frame.push_exec(t[i]);
+            }
+        } else {
+            let mut t = Vec::with_capacity(n);
+            for i in 0..n {
+                t.push(frame.pop_exec());
+            }
+            for i in 0..n {
+                frame.push_exec(t[i]);
+            }
+        }
+    }
+
+    fn _rt_dispatch_impl(&mut self, op: &RtOpCode) {
+        match *op {
+            RtOpCode::LoadObject(id) => {
+                self.get_current_frame().push_exec(Value::Object(id));
+            },
+            RtOpCode::StackMap(ref map) => {
+                self.get_current_frame().map_exec(map);
+            }
+        }
+    }
+
+    fn eval_basic_blocks_impl(&mut self, bb: &BasicBlock) -> EvalControlMessage {
         if self.object_pool.get_alloc_count() >= 1000 {
             self.object_pool.reset_alloc_count();
             self.object_pool.collect(&self.stack);
         }
 
-        for op in &basic_blocks[basic_block_id].opcodes {
+        for op in &bb.opcodes {
             match *op {
                 OpCode::LoadNull => {
                     self.get_current_frame().push_exec(Value::Null);
@@ -167,36 +676,10 @@ impl ExecutorImpl {
                     frame.push_exec(frame.get_this());
                 },
                 OpCode::Call(n_args) => {
-                    let (target, this, args) = {
-                        let frame = self.get_current_frame();
-
-                        let target = frame.pop_exec();
-                        let this = frame.pop_exec();
-
-                        let args: SmallVec<[Value; 4]> = (0..n_args)
-                            .map(|_| frame.pop_exec())
-                            .collect();
-
-                        (target, this, args)
-                    };
-                    self.invoke(target, this, None, args.as_slice());
+                    self._call_impl(n_args);
                 },
                 OpCode::CallField(n_args) => {
-                    let (target, this, field_name, args) = {
-                        let frame = self.get_current_frame();
-
-                        let target = frame.pop_exec();
-                        let this = frame.pop_exec();
-                        let field_name = frame.pop_exec();
-
-                        let args: SmallVec<[Value; 4]> = (0..n_args)
-                            .map(|_| frame.pop_exec())
-                            .collect();
-
-                        (target, this, field_name, args)
-                    };
-                    let field_name = ValueContext::new(&field_name, self.get_object_pool()).to_str().to_string();
-                    self.invoke(target, this, Some(field_name.as_str()), args.as_slice());
+                    self._call_field_impl(n_args);
                 },
                 OpCode::Pop => {
                     self.get_current_frame().pop_exec();
@@ -252,45 +735,10 @@ impl ExecutorImpl {
                     self.set_static_object(key, value);
                 },
                 OpCode::GetField => {
-                    let target_obj_val = self.get_current_frame().pop_exec();
-                    let target_obj = ValueContext::new(
-                        &target_obj_val,
-                        self.get_object_pool()
-                    ).as_object_direct();
-
-                    let key_val = self.get_current_frame().pop_exec();
-                    let key = ValueContext::new(
-                        &key_val,
-                        self.get_object_pool()
-                    ).as_object_direct().to_str();
-
-                    if let Some(v) = target_obj.get_field(self.get_object_pool(), key) {
-                        self.get_current_frame().push_exec(v);
-                    } else {
-                        self.get_current_frame().push_exec(Value::Null);
-                    }
+                    self._get_field_impl();
                 },
                 OpCode::SetField => {
-                    let (target_obj_val, key_val, value) = {
-                        let frame = self.get_current_frame();
-                        (
-                            frame.pop_exec(),
-                            frame.pop_exec(),
-                            frame.pop_exec()
-                        )
-                    };
-
-                    let target_obj = ValueContext::new(
-                        &target_obj_val,
-                        self.get_object_pool()
-                    ).as_object_direct();
-
-                    let key = ValueContext::new(
-                        &key_val,
-                        self.get_object_pool()
-                    ).as_object_direct().to_str();
-
-                    target_obj.set_field(key, value);
+                    self._set_field_impl();
                 },
                 OpCode::Branch(target_id) => {
                     return EvalControlMessage::Redirect(target_id);
@@ -339,394 +787,94 @@ impl ExecutorImpl {
                     self.get_current_frame().push_exec(ret);
                 },
                 OpCode::IntAdd => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Int(left + right));
+                    self._int_add_impl();
                 },
                 OpCode::IntSub => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Int(left - right));
+                    self._int_sub_impl();
                 },
                 OpCode::IntMul => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Int(left * right));
+                    self._int_mul_impl();
                 },
                 OpCode::IntDiv => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Int(left / right));
+                    self._int_div_impl();
                 },
                 OpCode::IntMod => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Int(left % right));
+                    self._int_mod_impl();
                 },
                 OpCode::IntPow => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_i64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Int(left.pow(right as u32)));
+                    self._int_pow_impl();
                 },
                 OpCode::FloatAdd => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Float(left + right));
+                    self._float_add_impl();
                 },
                 OpCode::FloatSub => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Float(left - right));
+                    self._float_sub_impl();
                 },
                 OpCode::FloatMul => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Float(left * right));
+                    self._float_mul_impl();
                 },
                 OpCode::FloatDiv => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Float(left / right));
+                    self._float_div_impl();
                 },
                 OpCode::FloatPowi => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_i64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Float(left.powi(right as i32)));
+                    self._float_powi_impl();
                 },
                 OpCode::FloatPowf => {
-                    let (left, right) = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        (
-                            ValueContext::new(&left, self.get_object_pool()).to_f64(),
-                            ValueContext::new(&right, self.get_object_pool()).to_f64(),
-                        )
-                    };
-
-                    self.get_current_frame().push_exec(Value::Float(left.powf(right)));
+                    self._float_powf_impl();
                 },
                 OpCode::StringAdd => {
-                    let new_value = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-                        let (left, right) = (
-                            ValueContext::new(&left, self.get_object_pool()),
-                            ValueContext::new(&right, self.get_object_pool())
-                        );
-                        format!("{}{}", left.to_str(), right.to_str())
-                    };
-                    let new_value = self.get_object_pool_mut().allocate(
-                        Box::new(new_value)
-                    );
-
-                    self.get_current_frame().push_exec(Value::Object(
-                        new_value
-                    ));
+                    self._string_add_impl();
                 },
                 OpCode::CastToFloat => {
-                    let value = ValueContext::new(
-                        &self.get_current_frame().pop_exec(),
-                        self.get_object_pool()
-                    ).to_f64();
-                    self.get_current_frame().push_exec(Value::Float(value));
+                    self._cast_to_float_impl();
                 },
                 OpCode::CastToInt => {
-                    let value = ValueContext::new(
-                        &self.get_current_frame().pop_exec(),
-                        self.get_object_pool()
-                    ).to_i64();
-                    self.get_current_frame().push_exec(Value::Int(value));
+                    self._cast_to_int_impl();
                 },
                 OpCode::CastToBool => {
-                    let value = ValueContext::new(
-                        &self.get_current_frame().pop_exec(),
-                        self.get_object_pool()
-                    ).to_bool();
-                    self.get_current_frame().push_exec(Value::Bool(value));
+                    self._cast_to_bool_impl();
                 },
                 OpCode::CastToString => {
-                    let value = ValueContext::new(
-                        &self.get_current_frame().pop_exec(),
-                        self.get_object_pool()
-                    ).to_str().to_string();
-                    let value = self.get_object_pool_mut().allocate(
-                        Box::new(value)
-                    );
-                    self.get_current_frame().push_exec(Value::Object(value));
+                    self._cast_to_string_impl();
                 },
                 OpCode::And => {
-                    let frame = self.get_current_frame();
-                    let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                    let left_ctx = ValueContext::new(
-                        &left,
-                        self.get_object_pool()
-                    );
-                    let right_ctx = ValueContext::new(
-                        &right,
-                        self.get_object_pool()
-                    );
-
-                    self.get_current_frame().push_exec(Value::Bool(left_ctx.to_bool() && right_ctx.to_bool()));
+                    self._and_impl();
                 },
                 OpCode::Or => {
-                    let frame = self.get_current_frame();
-                    let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                    let left_ctx = ValueContext::new(
-                        &left,
-                        self.get_object_pool()
-                    );
-                    let right_ctx = ValueContext::new(
-                        &right,
-                        self.get_object_pool()
-                    );
-
-                    self.get_current_frame().push_exec(Value::Bool(left_ctx.to_bool() || right_ctx.to_bool()));
+                    self._or_impl();
                 },
                 OpCode::Not => {
-                    let value = ValueContext::new(
-                        &self.get_current_frame().pop_exec(),
-                        self.get_object_pool()
-                    ).to_bool();
-                    self.get_current_frame().push_exec(Value::Bool(!value));
+                    self._not_impl();
                 },
                 OpCode::TestLt => {
-                    let ord = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                        let left_ctx = ValueContext::new(
-                            &left,
-                            self.get_object_pool()
-                        );
-                        let right_ctx = ValueContext::new(
-                            &right,
-                            self.get_object_pool()
-                        );
-                        left_ctx.compare(&right_ctx)
-                    };
-
-                    self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Less)));
+                    self._test_lt_impl();
                 },
                 OpCode::TestLe => {
-                    let ord = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                        let left_ctx = ValueContext::new(
-                            &left,
-                            self.get_object_pool()
-                        );
-                        let right_ctx = ValueContext::new(
-                            &right,
-                            self.get_object_pool()
-                        );
-                        left_ctx.compare(&right_ctx)
-                    };
-
-                    self.get_current_frame().push_exec(Value::Bool(
-                        ord == Some(Ordering::Less) || ord == Some(Ordering::Equal)
-                    ));
+                    self._test_le_impl();
                 },
                 OpCode::TestEq => {
-                    let ord = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                        let left_ctx = ValueContext::new(
-                            &left,
-                            self.get_object_pool()
-                        );
-                        let right_ctx = ValueContext::new(
-                            &right,
-                            self.get_object_pool()
-                        );
-                        left_ctx.compare(&right_ctx)
-                    };
-
-                    self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Equal)));
+                    self._test_eq_impl();
                 },
                 OpCode::TestNe => {
-                    let ord = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                        let left_ctx = ValueContext::new(
-                            &left,
-                            self.get_object_pool()
-                        );
-                        let right_ctx = ValueContext::new(
-                            &right,
-                            self.get_object_pool()
-                        );
-                        left_ctx.compare(&right_ctx)
-                    };
-
-                    self.get_current_frame().push_exec(Value::Bool(ord != Some(Ordering::Equal)));
+                    self._test_ne_impl();
                 },
                 OpCode::TestGe => {
-                    let ord = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                        let left_ctx = ValueContext::new(
-                            &left,
-                            self.get_object_pool()
-                        );
-                        let right_ctx = ValueContext::new(
-                            &right,
-                            self.get_object_pool()
-                        );
-                        left_ctx.compare(&right_ctx)
-                    };
-
-                    self.get_current_frame().push_exec(Value::Bool(
-                        ord == Some(Ordering::Greater) || ord == Some(Ordering::Equal)
-                    ));
+                    self._test_ge_impl();
                 },
                 OpCode::TestGt => {
-                    let ord = {
-                        let frame = self.get_current_frame();
-                        let (left, right) = (frame.pop_exec(), frame.pop_exec());
-
-                        let left_ctx = ValueContext::new(
-                            &left,
-                            self.get_object_pool()
-                        );
-                        let right_ctx = ValueContext::new(
-                            &right,
-                            self.get_object_pool()
-                        );
-                        left_ctx.compare(&right_ctx)
-                    };
-
-                    self.get_current_frame().push_exec(Value::Bool(ord == Some(Ordering::Greater)));
+                    self._test_gt_impl();
                 },
                 OpCode::Rotate2 => {
-                    let frame = self.get_current_frame();
-                    let a = frame.pop_exec();
-                    let b = frame.pop_exec();
-
-                    frame.push_exec(a);
-                    frame.push_exec(b);
+                    self._rotate2_impl();
                 },
                 OpCode::Rotate3 => {
-                    let frame = self.get_current_frame();
-                    let a = frame.pop_exec();
-                    let b = frame.pop_exec();
-                    let c = frame.pop_exec();
-
-                    frame.push_exec(b);
-                    frame.push_exec(a);
-                    frame.push_exec(c);
+                    self._rotate3_impl();
                 },
                 OpCode::RotateReverse(n) => {
-                    let frame = self.get_current_frame();
-                    if n <= 4 {
-                        let mut t = [Value::Null; 4];
-                        for i in 0..n {
-                            t[i] = frame.pop_exec();
-                        }
-                        for i in 0..n {
-                            frame.push_exec(t[i]);
-                        }
-                    } else {
-                        let mut t = Vec::with_capacity(n);
-                        for i in 0..n {
-                            t.push(frame.pop_exec());
-                        }
-                        for i in 0..n {
-                            frame.push_exec(t[i]);
-                        }
-                    }
+                    self._rotate_reverse_impl(n);
                 },
                 OpCode::Rt(ref op) => {
-                    match *op {
-                        RtOpCode::LoadObject(id) => {
-                            self.get_current_frame().push_exec(Value::Object(id));
-                        },
-                        RtOpCode::StackMap(ref map) => {
-                            self.get_current_frame().map_exec(map);
-                        }
-                    }
+                    self._rt_dispatch_impl(op);
                 }
             }
         }
@@ -738,7 +886,7 @@ impl ExecutorImpl {
         let mut current_id = basic_block_id;
 
         loop {
-            let msg = self.eval_basic_blocks_impl(basic_blocks, current_id);
+            let msg = self.eval_basic_blocks_impl(&basic_blocks[current_id]);
             match msg {
                 EvalControlMessage::Redirect(target) => {
                     current_id = target;
