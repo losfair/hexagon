@@ -50,7 +50,7 @@ impl Object for String {
         match field_name {
             "__add__" => {
                 let right = executor.get_current_frame().must_get_argument(0);
-                let ret = ValueContext::new(&right, executor.get_object_pool()).to_str().to_string();
+                let ret = self.clone() + ValueContext::new(&right, executor.get_object_pool()).to_str().as_ref();
 
                 Value::Object(
                     executor.get_object_pool_mut().allocate(
