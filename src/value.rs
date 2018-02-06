@@ -5,7 +5,7 @@ use object::Object;
 use object_pool::ObjectPool;
 use object_info::ObjectHandle;
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Value {
     Object(usize),
     Null,
