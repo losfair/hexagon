@@ -10,6 +10,9 @@ extern crate serde;
 extern crate serde_derive;
 extern crate bincode;
 
+#[macro_use]
+pub mod debug;
+
 pub mod hybrid;
 pub mod builtin;
 
