@@ -277,10 +277,16 @@ impl BasicBlock {
                 begin += 1;
             }
 
-            let result = OpCode::Rt(RtOpCode::StackMap(StackMapPattern {
+            let pattern = StackMapPattern {
                 map: (begin..(end_state - lower_bound + 1) as usize).map(|i| stack_map[i].clone()).collect(),
                 end_state: end_state
-            }));
+            };
+            if pattern.map.len() == 0 && pattern.end_state == 0 {
+                debug!("[pack_deferred_ops] No-op detected");
+                return None;
+            }
+
+            let result = OpCode::Rt(RtOpCode::StackMap(pattern));
 
             debug!("[pack_deferred_ops] {:?} -> {:?}", ops, result);
             Some(result)
