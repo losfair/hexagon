@@ -129,26 +129,12 @@ impl BasicBlock {
     }
 
     pub fn rebuild_stack_patterns(&mut self) {
-        fn pack_deferred_ops(ops: Vec<BasicStackOp>) -> Option<OpCode> {
+        fn pack_deferred_ops(ops: Vec<BasicStackOp>) -> PackResult {
             if ops.len() == 0 {
-                return None;
+                return PackResult::Noop;
             }
-            if ops.len() == 1 {
-                return Some(match ops[0] {
-                    BasicStackOp::Dup => OpCode::Dup,
-                    BasicStackOp::Pop => OpCode::Pop,
-                    BasicStackOp::Rotate2 => OpCode::Rotate2,
-                    BasicStackOp::Rotate3 => OpCode::Rotate3,
-                    BasicStackOp::RotateReverse(n) => OpCode::RotateReverse(n),
-                    BasicStackOp::LoadInt(v) => OpCode::LoadInt(v),
-                    BasicStackOp::LoadFloat(v) => OpCode::LoadFloat(v),
-                    BasicStackOp::LoadString(ref v) => OpCode::LoadString(v.clone()),
-                    BasicStackOp::LoadBool(v) => OpCode::LoadBool(v),
-                    BasicStackOp::LoadNull => OpCode::LoadNull,
-                    BasicStackOp::GetLocal(id) => OpCode::GetLocal(id),
-                    BasicStackOp::GetArgument(id) => OpCode::GetArgument(id),
-                    BasicStackOp::LoadObject(id) => OpCode::Rt(RtOpCode::LoadObject(id))
-                })
+            if ops.len() <= 2 {
+                return PackResult::Restore(ops);
             }
 
             let mut lower_bound: isize = 0;
@@ -283,13 +269,18 @@ impl BasicBlock {
             };
             if pattern.map.len() == 0 && pattern.end_state == 0 {
                 debug!("[pack_deferred_ops] No-op detected");
-                return None;
+                return PackResult::Noop;
+            }
+
+            if pattern.map.len() as f64 > ops.len() as f64 * 0.6 {
+                debug!("[pack_deferred_ops] Result worse than expected. Rolling back.");
+                return PackResult::Restore(ops);
             }
 
             let result = OpCode::Rt(RtOpCode::StackMap(pattern));
 
             debug!("[pack_deferred_ops] {:?} -> {:?}", ops, result);
-            Some(result)
+            PackResult::OkWithResult(result)
         }
 
         let mut new_ops: Vec<OpCode> = Vec::new();
@@ -340,8 +331,16 @@ impl BasicBlock {
                 },
                 _ => {
                     let packed = pack_deferred_ops(::std::mem::replace(&mut deferred_stack_ops, Vec::new()));
-                    if let Some(v) = packed {
-                        new_ops.push(v);
+                    match packed {
+                        PackResult::OkWithResult(v) => {
+                            new_ops.push(v);
+                        },
+                        PackResult::Noop => {},
+                        PackResult::Restore(seq) => {
+                            for v in seq {
+                                new_ops.push(v.to_opcode());
+                            }
+                        }
                     }
                     new_ops.push(op.clone());
                 }
@@ -349,12 +348,26 @@ impl BasicBlock {
         }
 
         let packed = pack_deferred_ops(::std::mem::replace(&mut deferred_stack_ops, Vec::new()));
-        if let Some(v) = packed {
-            new_ops.push(v);
+        match packed {
+            PackResult::OkWithResult(v) => {
+                new_ops.push(v);
+            },
+            PackResult::Noop => {},
+            PackResult::Restore(seq) => {
+                for v in seq {
+                    new_ops.push(v.to_opcode());
+                }
+            }
         }
 
         self.opcodes = new_ops;
     }
+}
+
+enum PackResult {
+    OkWithResult(OpCode),
+    Noop,
+    Restore(Vec<BasicStackOp>)
 }
 
 struct ValueInfo {
@@ -394,4 +407,24 @@ enum BasicStackOp {
     LoadNull,
     LoadObject(usize),
     GetArgument(usize)
+}
+
+impl BasicStackOp {
+    fn to_opcode(&self) -> OpCode {
+        match *self {
+            BasicStackOp::Dup => OpCode::Dup,
+            BasicStackOp::Pop => OpCode::Pop,
+            BasicStackOp::Rotate2 => OpCode::Rotate2,
+            BasicStackOp::Rotate3 => OpCode::Rotate3,
+            BasicStackOp::RotateReverse(n) => OpCode::RotateReverse(n),
+            BasicStackOp::LoadInt(v) => OpCode::LoadInt(v),
+            BasicStackOp::LoadFloat(v) => OpCode::LoadFloat(v),
+            BasicStackOp::LoadString(ref v) => OpCode::LoadString(v.clone()),
+            BasicStackOp::LoadBool(v) => OpCode::LoadBool(v),
+            BasicStackOp::LoadNull => OpCode::LoadNull,
+            BasicStackOp::GetLocal(id) => OpCode::GetLocal(id),
+            BasicStackOp::GetArgument(id) => OpCode::GetArgument(id),
+            BasicStackOp::LoadObject(id) => OpCode::Rt(RtOpCode::LoadObject(id))
+        }
+    }
 }
