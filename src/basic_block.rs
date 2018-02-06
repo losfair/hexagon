@@ -98,7 +98,8 @@ impl BasicBlock {
                     BasicStackOp::LoadBool(v) => OpCode::LoadBool(v),
                     BasicStackOp::LoadNull => OpCode::LoadNull,
                     BasicStackOp::GetLocal(id) => OpCode::GetLocal(id),
-                    BasicStackOp::GetArgument(id) => OpCode::GetArgument(id)
+                    BasicStackOp::GetArgument(id) => OpCode::GetArgument(id),
+                    BasicStackOp::LoadObject(id) => OpCode::Rt(RtOpCode::LoadObject(id))
                 })
             }
 
@@ -136,7 +137,8 @@ impl BasicBlock {
                         | BasicStackOp::LoadString(_)
                         | BasicStackOp::LoadNull
                         | BasicStackOp::GetLocal(_)
-                        | BasicStackOp::GetArgument(_) => {
+                        | BasicStackOp::GetArgument(_)
+                        | BasicStackOp::LoadObject(_) => {
                         current += 1;
                     }
                 }
@@ -211,6 +213,10 @@ impl BasicBlock {
                     BasicStackOp::GetArgument(id) => {
                         current += 1;
                         stack_map[current] = ValueLocation::Argument(id);
+                    },
+                    BasicStackOp::LoadObject(id) => {
+                        current += 1;
+                        stack_map[current] = ValueLocation::ConstObject(id);
                     }
                 }
             }
@@ -275,6 +281,9 @@ impl BasicBlock {
                 OpCode::GetArgument(id) => {
                     deferred_stack_ops.push(BasicStackOp::GetArgument(id));
                 },
+                OpCode::Rt(RtOpCode::LoadObject(id)) => {
+                    deferred_stack_ops.push(BasicStackOp::LoadObject(id));
+                },
                 _ => {
                     let packed = pack_deferred_ops(::std::mem::replace(&mut deferred_stack_ops, Vec::new()));
                     if let Some(v) = packed {
@@ -329,5 +338,6 @@ enum BasicStackOp {
     LoadFloat(f64),
     LoadBool(bool),
     LoadNull,
+    LoadObject(usize),
     GetArgument(usize)
 }

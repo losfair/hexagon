@@ -20,9 +20,30 @@ impl<'a> FunctionOptimizer<'a> {
     }
 
     pub fn optimize(&mut self) {
+        // Optimizes out (LoadString, GetStatic) sequences if possible.
+        // This requires const string information.
         self.optimize_const_static_load();
+
+        // Const string information will be lost after this;
+        self.optimize_string_load();
+
+        // Most stack push / pop information will be lost after this;
+        // So this should be the last optimization.
         for bb in self.basic_blocks.iter_mut() {
             bb.rebuild_stack_patterns();
+        }
+    }
+
+    pub fn optimize_string_load(&mut self) {
+        for bb in self.basic_blocks.iter_mut() {
+            for op in bb.opcodes.iter_mut() {
+                if let OpCode::LoadString(ref s) = *op {
+                    let s = s.clone();
+                    let obj = self.pool.allocate(Box::new(s));
+                    self.rt_handles.push(obj);
+                    *op = OpCode::Rt(RtOpCode::LoadObject(obj));
+                }
+            }
         }
     }
 

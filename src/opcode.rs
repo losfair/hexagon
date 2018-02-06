@@ -90,7 +90,8 @@ pub enum ValueLocation {
     ConstFloat(f64),
     ConstString(String),
     ConstBool(bool),
-    ConstNull
+    ConstNull,
+    ConstObject(usize)
 }
 
 impl OpCode {

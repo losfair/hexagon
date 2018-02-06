@@ -208,8 +208,9 @@ impl Frame {
         let stack = unsafe { &mut *self.exec_stack.get() };
 
         let center = stack.len() - 1;
-        let new_values: SmallVec<[Value; 4]> = p.map.iter().map(|loc| {
-            match *loc {
+        let mut new_values: SmallVec<[Value; 4]> = SmallVec::with_capacity(p.map.len());
+        for loc in &p.map {
+            new_values.push(match *loc {
                 ValueLocation::Stack(dt) => stack[(center as isize + dt) as usize],
                 ValueLocation::Local(id) => self.get_local(id),
                 ValueLocation::Argument(id) => self.must_get_argument(id),
@@ -219,9 +220,10 @@ impl Frame {
                 ValueLocation::ConstNull => Value::Null,
                 ValueLocation::ConstInt(v) => Value::Int(v),
                 ValueLocation::ConstFloat(v) => Value::Float(v),
-                ValueLocation::ConstBool(v) => Value::Bool(v)
-            }
-        }).collect();
+                ValueLocation::ConstBool(v) => Value::Bool(v),
+                ValueLocation::ConstObject(id) => Value::Object(id)
+            });
+        }
 
         if p.end_state < 0 {
             for _ in 0..(-p.end_state) {
