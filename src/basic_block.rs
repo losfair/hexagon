@@ -15,7 +15,55 @@ impl BasicBlock {
         }
     }
 
+    pub fn join(&mut self, other: BasicBlock) {
+        self.opcodes.pop().unwrap();
+        for op in other.opcodes {
+            self.opcodes.push(op);
+        }
+    }
+
+    pub fn try_replace_branch_targets(&mut self, to: usize, from: usize) -> bool {
+        if self.opcodes.len() == 0 {
+            return false;
+        }
+
+        let last_opcode = &mut self.opcodes[self.opcodes.len() - 1];
+        match *last_opcode {
+            OpCode::ConditionalBranch(if_true, if_false) => {
+                if if_true == from || if_false == from {
+                    let if_true = if if_true == from {
+                        to
+                    } else {
+                        if_true
+                    };
+                    let if_false = if if_false == from {
+                        to
+                    } else {
+                        if_false
+                    };
+                    *last_opcode = OpCode::ConditionalBranch(if_true, if_false);
+                    true
+                } else {
+                    false
+                }
+            },
+            OpCode::Branch(t) => {
+                if t == from {
+                    *last_opcode = OpCode::Branch(to);
+                    true
+                } else {
+                    false
+                }
+            },
+            _ => false
+        }
+    }
+
     pub fn branch_targets(&self) -> (Option<usize>, Option<usize>) {
+        if self.opcodes.len() == 0 {
+            return (None, None);
+        }
+
         let last_opcode = &self.opcodes[self.opcodes.len() - 1];
         match *last_opcode {
             OpCode::ConditionalBranch(if_true, if_false) => (Some(if_true), Some(if_false)),
