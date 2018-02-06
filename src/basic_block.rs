@@ -172,10 +172,21 @@ impl BasicBlock {
                 }
             }
 
-            Some(OpCode::Rt(RtOpCode::StackMap(StackMapPattern {
-                map: (0..(end_state - lower_bound + 1) as usize).map(|i| stack_map[i]).collect(),
+            let mut begin: usize = 0;
+            while begin < (end_state - lower_bound + 1) as usize {
+                if stack_map[begin] != lower_bound {
+                    break;
+                }
+                begin += 1;
+            }
+
+            let result = OpCode::Rt(RtOpCode::StackMap(StackMapPattern {
+                map: (begin..(end_state - lower_bound + 1) as usize).map(|i| stack_map[i]).collect(),
                 end_state: end_state
-            })))
+            }));
+
+            debug!("[pack_deferred_ops] {:?} -> {:?}", ops, result);
+            Some(result)
         }
 
         let mut new_ops: Vec<OpCode> = Vec::new();
@@ -241,7 +252,7 @@ impl Default for ValueInfo {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum BasicStackOp {
     Dup,
     Pop,
