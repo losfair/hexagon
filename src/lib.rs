@@ -32,3 +32,6 @@ pub mod value;
 
 #[cfg(test)]
 mod executor_test;
+
+#[cfg(test)]
+mod bench;
