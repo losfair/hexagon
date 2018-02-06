@@ -642,7 +642,9 @@ impl ExecutorImpl {
                 self.get_current_frame().push_exec(Value::Object(id));
             },
             RtOpCode::StackMap(ref map) => {
-                self.get_current_frame().map_exec(map);
+                let frame = self.stack.top();
+                let pool = &mut self.object_pool;
+                frame.map_exec(map, pool);
             }
         }
     }

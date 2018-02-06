@@ -5,7 +5,8 @@ use std::ops::{Deref, DerefMut};
 use smallvec::SmallVec;
 use errors;
 use value::Value;
-use opcode::StackMapPattern;
+use opcode::{StackMapPattern, ValueLocation};
+use object_pool::ObjectPool;
 
 thread_local! {
     static FRAME_POOL: RefCell<FramePool> = RefCell::new(FramePool::new(128));
@@ -203,11 +204,24 @@ impl Frame {
         stack.push(last);
     }
 
-    pub fn map_exec(&self, p: &StackMapPattern) {
+    pub fn map_exec(&self, p: &StackMapPattern, pool: &mut ObjectPool) {
         let stack = unsafe { &mut *self.exec_stack.get() };
 
         let center = stack.len() - 1;
-        let new_values: SmallVec<[Value; 4]> = p.map.iter().map(|dt| stack[(center as isize + dt) as usize]).collect();
+        let new_values: SmallVec<[Value; 4]> = p.map.iter().map(|loc| {
+            match *loc {
+                ValueLocation::Stack(dt) => stack[(center as isize + dt) as usize],
+                ValueLocation::Local(id) => self.get_local(id),
+                ValueLocation::Argument(id) => self.must_get_argument(id),
+                ValueLocation::ConstString(ref s) => {
+                    Value::Object(pool.allocate(Box::new(s.clone())))
+                },
+                ValueLocation::ConstNull => Value::Null,
+                ValueLocation::ConstInt(v) => Value::Int(v),
+                ValueLocation::ConstFloat(v) => Value::Float(v),
+                ValueLocation::ConstBool(v) => Value::Bool(v)
+            }
+        }).collect();
 
         if p.end_state < 0 {
             for _ in 0..(-p.end_state) {

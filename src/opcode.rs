@@ -77,8 +77,20 @@ pub enum RtOpCode {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct StackMapPattern {
-    pub(crate) map: SmallVec<[isize; 4]>,
+    pub(crate) map: SmallVec<[ValueLocation; 4]>,
     pub(crate) end_state: isize
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ValueLocation {
+    Stack(isize),
+    Local(usize),
+    Argument(usize),
+    ConstInt(i64),
+    ConstFloat(f64),
+    ConstString(String),
+    ConstBool(bool),
+    ConstNull
 }
 
 impl OpCode {
