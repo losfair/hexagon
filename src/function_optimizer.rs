@@ -6,6 +6,7 @@ use object_pool::ObjectPool;
 use value::Value;
 
 pub struct FunctionOptimizer<'a> {
+    binded_this: Option<Value>,
     basic_blocks: &'a mut Vec<BasicBlock>,
     rt_handles: &'a mut Vec<usize>,
     pool: &'a mut ObjectPool
@@ -14,10 +15,15 @@ pub struct FunctionOptimizer<'a> {
 impl<'a> FunctionOptimizer<'a> {
     pub fn new(basic_blocks: &'a mut Vec<BasicBlock>, rt_handles: &'a mut Vec<usize>, pool: &'a mut ObjectPool) -> FunctionOptimizer<'a> {
         FunctionOptimizer {
+            binded_this: None,
             basic_blocks: basic_blocks,
             rt_handles: rt_handles,
             pool: pool
         }
+    }
+
+    pub fn set_binded_this(&mut self, this: Option<Value>) {
+        self.binded_this = this;
     }
 
     pub fn static_optimize(&mut self) {
@@ -29,7 +35,9 @@ impl<'a> FunctionOptimizer<'a> {
             // (LoadObject, GetStatic) -> LoadValue
             bb.transform_const_static_loads(self.rt_handles, self.pool);
 
-            bb.transform_const_get_fields(self.rt_handles, self.pool);
+            while bb.transform_const_get_fields(self.rt_handles, self.pool, self.binded_this) {
+                bb.remove_nops();
+            }
             bb.transform_const_calls();
             bb.remove_nops();
 
@@ -49,7 +57,9 @@ impl<'a> FunctionOptimizer<'a> {
             // (LoadObject, GetStatic) -> LoadValue
             bb.transform_const_static_loads(self.rt_handles, self.pool);
 
-            bb.transform_const_get_fields(self.rt_handles, self.pool);
+            while bb.transform_const_get_fields(self.rt_handles, self.pool, self.binded_this) {
+                bb.remove_nops();
+            }
             bb.transform_const_calls();
             bb.remove_nops();
         }

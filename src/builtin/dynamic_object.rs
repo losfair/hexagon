@@ -49,8 +49,17 @@ impl Object for DynamicObject {
         }
     }
 
-    fn has_const_field(&self, _name: &str) -> bool {
-        self.frozen.get()
+    fn has_const_field(&self, pool: &ObjectPool, name: &str) -> bool {
+        if self.frozen.get() {
+            true
+        } else {
+            if let Some(prototype) = self.prototype {
+                let pt_object = pool.get_direct(prototype);
+                pt_object.has_const_field(pool, name)
+            } else {
+                false
+            }
+        }
     }
 
     fn set_field(&self, name: &str, value: Value) {

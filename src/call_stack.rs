@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::cell::UnsafeCell;
 use std::cell::RefCell;
 use std::collections::HashSet;
@@ -93,7 +94,7 @@ impl FrameHandle {
 // [unsafe]
 // These fields are guaranteed to be accessed properly (as an implementation detail).
 pub struct Frame {
-    this: Value,
+    this: Cell<Value>,
     arguments: UnsafeCell<SmallVec<[Value; 4]>>,
     locals: UnsafeCell<SmallVec<[Value; 8]>>,
     pub(crate) exec_stack: UnsafeCell<SmallVec<[Value; 8]>>
@@ -131,7 +132,7 @@ impl CallStack {
     pub fn collect_objects(&self) -> Vec<usize> {
         let mut objs = HashSet::new();
         for frame in &self.frames {
-            if let Value::Object(id) = frame.this {
+            if let Value::Object(id) = frame.this.get() {
                 objs.insert(id);
             }
             for v in unsafe { &*frame.arguments.get() }.iter() {
@@ -157,14 +158,14 @@ impl CallStack {
 impl Frame {
     fn new() -> Frame {
         Frame {
-            this: Value::Null,
+            this: Cell::new(Value::Null),
             arguments: UnsafeCell::new(SmallVec::new()),
             locals: UnsafeCell::new(SmallVec::new()),
             exec_stack: UnsafeCell::new(SmallVec::new())
         }
     }
     fn reset(&mut self) {
-        self.this = Value::Null;
+        self.this.set(Value::Null);
         unsafe {
             (&mut *self.arguments.get()).clear();
             (&mut *self.locals.get()).clear();
@@ -173,7 +174,7 @@ impl Frame {
     }
 
     pub fn init_with_arguments(&mut self, this: Value, args: &[Value]) {
-        self.this = this;
+        self.this.set(this);
         let arguments = unsafe { &mut *self.arguments.get() };
         for arg in args {
             arguments.push(*arg);
@@ -279,6 +280,11 @@ impl Frame {
 
     #[inline]
     pub fn get_this(&self) -> Value {
-        self.this
+        self.this.get()
+    }
+
+    #[inline]
+    pub fn set_this(&self, this: Value) {
+        self.this.set(this);
     }
 }

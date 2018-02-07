@@ -41,7 +41,7 @@ pub trait Object {
             None => panic!(errors::VMError::from(errors::FieldNotFoundError::from_field_name(name)))
         }
     }
-    fn has_const_field(&self, _name: &str) -> bool {
+    fn has_const_field(&self, _pool: &ObjectPool, _name: &str) -> bool {
         false
     }
     fn compare(&self, _other: &ValueContext) -> Option<Ordering> {

@@ -16,7 +16,8 @@ pub enum Function {
 pub struct VirtualFunction {
     basic_blocks: Vec<BasicBlock>,
     rt_handles: Vec<usize>,
-    should_optimize: bool
+    should_optimize: bool,
+    this: Option<Value>
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -49,7 +50,11 @@ impl Object for Function {
     fn call(&self, executor: &mut ExecutorImpl) -> Value {
         match *self {
             Function::Virtual(ref vf) => {
-                executor.eval_basic_blocks(vf.borrow().basic_blocks.as_slice(), 0)
+                let vf = vf.borrow();
+                if let Some(this) = vf.this {
+                    executor.get_current_frame().set_this(this);
+                }
+                executor.eval_basic_blocks(vf.basic_blocks.as_slice(), 0)
             },
             Function::Native(ref nf) => {
                 nf(executor)
@@ -63,7 +68,8 @@ impl Function {
         let vf = VirtualFunction {
             basic_blocks: blocks,
             rt_handles: Vec::new(),
-            should_optimize: false
+            should_optimize: false,
+            this: None
         };
 
         vf.validate().unwrap_or_else(|e| {
@@ -71,6 +77,21 @@ impl Function {
         });
 
         Function::Virtual(RefCell::new(vf))
+    }
+
+    pub fn bind_this(&self, this: Value) {
+        if let Function::Virtual(ref f) = *self {
+            if let Ok(mut f) = f.try_borrow_mut() {
+                if f.this.is_some() {
+                    panic!(errors::VMError::from("Cannot rebind this"));
+                }
+                f.this = Some(this);
+            } else {
+                panic!(errors::VMError::from("Cannot bind from inside the function"));
+            }
+        } else {
+            panic!(errors::VMError::from("Binding this is only supported on virtual functions"));
+        }
     }
 
     pub fn enable_optimization(&mut self) {
@@ -123,11 +144,13 @@ impl Function {
 impl VirtualFunction {
     fn static_optimize(&mut self, pool: &mut ObjectPool) {
         let mut optimizer = FunctionOptimizer::new(&mut self.basic_blocks, &mut self.rt_handles, pool);
+        optimizer.set_binded_this(self.this);
         optimizer.static_optimize();
     }
 
     fn dynamic_optimize(&mut self, pool: &mut ObjectPool) {
         let mut optimizer = FunctionOptimizer::new(&mut self.basic_blocks, &mut self.rt_handles, pool);
+        optimizer.set_binded_this(self.this);
         optimizer.dynamic_optimize();
     }
 

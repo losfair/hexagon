@@ -287,16 +287,29 @@ impl BasicBlock {
         self.opcodes.retain(|v| *v != OpCode::Nop);
     }
 
-    pub fn transform_const_get_fields(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool) {
+    pub fn transform_const_get_fields(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool, this: Option<Value>) -> bool {
+        let mut optimized: bool = false;
+
         for i in 2..self.opcodes.len() {
             if self.opcodes[i] == OpCode::GetField {
                 // We assume that all `LoadString`s have been transformed into
                 // `LoadObject` before this.
-                if let OpCode::Rt(RtOpCode::LoadObject(obj_id)) = self.opcodes[i - 1] {
+                let obj_id = if let OpCode::Rt(RtOpCode::LoadObject(id)) = self.opcodes[i - 1] {
+                    Some(id)
+                } else if self.opcodes[i - 1] == OpCode::LoadThis && this.is_some() {
+                    if let Value::Object(id) = this.unwrap() {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                if let Some(obj_id) = obj_id {
                     if let OpCode::Rt(RtOpCode::LoadObject(key_id)) = self.opcodes[i - 2] {
                         let obj = pool.get_direct(obj_id);
                         let key = pool.get_direct(key_id).to_string();
-                        if obj.has_const_field(key.as_str()) {
+                        if obj.has_const_field(pool, key.as_str()) {
                             if let Some(v) = obj.get_field(pool, key.as_str()) {
                                 debug!("[transform_const_get_fields] GetField {} -> {:?}", key, v);
                                 if let Value::Object(id) = v {
@@ -305,17 +318,33 @@ impl BasicBlock {
                                 self.opcodes[i - 2] = OpCode::Nop;
                                 self.opcodes[i - 1] = OpCode::Nop;
                                 self.opcodes[i] = OpCode::Rt(RtOpCode::LoadValue(v));
+                                optimized = true;
+                            } else {
+                                debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
                             }
+                        } else {
+                            debug!("[transform_const_get_fields] Field {} is not const", key);
                         }
                     }
                 }
             } else if let OpCode::CallField(n_args) = self.opcodes[i] {
-                if let OpCode::Rt(RtOpCode::LoadObject(obj_id)) = self.opcodes[i - 1] {
-                    // opcodes[i - 2] is the `this` object
+                let obj_id = if let OpCode::Rt(RtOpCode::LoadObject(id)) = self.opcodes[i - 1] {
+                    Some(id)
+                } else if self.opcodes[i - 1] == OpCode::LoadThis && this.is_some() {
+                    if let Value::Object(id) = this.unwrap() {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                if let Some(obj_id) = obj_id {
+                    // opcodes[i - 2] is the target `this` object
                     if let OpCode::Rt(RtOpCode::LoadObject(key_id)) = self.opcodes[i - 3] {
                         let obj = pool.get_direct(obj_id);
                         let key = pool.get_direct(key_id).to_string();
-                        if obj.has_const_field(key.as_str()) {
+                        if obj.has_const_field(pool, key.as_str()) {
                             if let Some(v) = obj.get_field(pool, key.as_str()) {
                                 debug!("[transform_const_get_fields] CallField {} -> {:?}", key, v);
 
@@ -327,12 +356,19 @@ impl BasicBlock {
                                 self.opcodes[i - 3] = OpCode::Nop;
                                 self.opcodes[i - 1] = OpCode::Rt(RtOpCode::LoadValue(v));
                                 self.opcodes[i] = OpCode::Call(n_args);
+                                optimized = true;
+                            } else {
+                                debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
                             }
+                        } else {
+                            debug!("[transform_const_get_fields] Field {} is not const", key);
                         }
                     }
                 }
             }
         }
+
+        optimized
     }
 
     pub fn transform_const_string_loads(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool) {
