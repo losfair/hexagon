@@ -100,7 +100,45 @@ pub enum ValueLocation {
     This
 }
 
+impl StackMapPattern {
+    pub fn to_opcode_sequence(&self) -> Option<Vec<OpCode>> {
+        let mut opcodes: Vec<OpCode> = Vec::new();
+        let n_pushes: isize = self.end_state - self.map.len() as isize;
+        if n_pushes > 0 {
+            return None;
+        } else {
+            for _ in 0..(-n_pushes) {
+                opcodes.push(OpCode::Pop);
+            }
+        }
+
+        for loc in self.map.iter() {
+            if let Some(op) = loc.to_opcode() {
+                opcodes.push(op);
+            } else {
+                return None;
+            }
+        }
+        Some(opcodes)
+    }
+}
+
 impl ValueLocation {
+    pub fn to_opcode(&self) -> Option<OpCode> {
+        match *self {
+            ValueLocation::Stack(_) => None,
+            ValueLocation::Local(id) => Some(OpCode::GetLocal(id)),
+            ValueLocation::Argument(id) => Some(OpCode::GetArgument(id)),
+            ValueLocation::ConstInt(v) => Some(OpCode::LoadInt(v)),
+            ValueLocation::ConstFloat(v) => Some(OpCode::LoadFloat(v)),
+            ValueLocation::ConstString(ref s) => Some(OpCode::LoadString(s.clone())),
+            ValueLocation::ConstBool(v) => Some(OpCode::LoadBool(v)),
+            ValueLocation::ConstNull => Some(OpCode::LoadNull),
+            ValueLocation::ConstObject(id) => Some(OpCode::Rt(RtOpCode::LoadObject(id))),
+            ValueLocation::This => Some(OpCode::LoadThis)
+        }
+    }
+
     pub fn from_opcode(op: &OpCode) -> Option<ValueLocation> {
         match *op {
             OpCode::GetLocal(id) => Some(ValueLocation::Local(id)),

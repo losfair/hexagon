@@ -292,6 +292,26 @@ impl BasicBlock {
         self.opcodes.retain(|v| *v != OpCode::Nop);
     }
 
+    pub fn flatten_stack_maps(&mut self) {
+        let mut new_opcodes: Vec<OpCode> = Vec::new();
+        for op in &self.opcodes {
+            if let OpCode::Rt(RtOpCode::StackMap(ref p)) = *op {
+                if let Some(seq) = p.to_opcode_sequence() {
+                    debug!("[flatten_stack_maps] {:?} -> {:?}", p, seq);
+                    for v in seq {
+                        new_opcodes.push(v);
+                    }
+                } else {
+                    debug!("[flatten_stack_maps] Cannot convert stack map to opcode sequence");
+                    new_opcodes.push(op.clone());
+                }
+            } else {
+                new_opcodes.push(op.clone());
+            }
+        }
+        self.opcodes = new_opcodes;
+    }
+
     pub fn transform_const_get_fields(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool, this: Option<Value>) -> bool {
         let mut optimized: bool = false;
 

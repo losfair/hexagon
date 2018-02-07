@@ -36,6 +36,7 @@ impl<'a> FunctionOptimizer<'a> {
             bb.transform_const_static_loads(self.rt_handles, self.pool);
 
             while bb.transform_const_get_fields(self.rt_handles, self.pool, self.binded_this) {
+                bb.flatten_stack_maps();
                 bb.remove_nops();
             }
             bb.transform_const_calls();
