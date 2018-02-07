@@ -1,4 +1,7 @@
 use smallvec::SmallVec;
+use call_stack::Frame;
+use object_pool::ObjectPool;
+use value::Value;
 
 /// Hexagon VM opcodes.
 ///
@@ -92,6 +95,27 @@ pub enum ValueLocation {
     ConstBool(bool),
     ConstNull,
     ConstObject(usize)
+}
+
+impl ValueLocation {
+    pub fn extract(&self, frame: &Frame, pool: &mut ObjectPool) -> Value {
+        let stack = unsafe { &mut *frame.exec_stack.get() };
+        let center = stack.len() - 1;
+
+        match *self {
+            ValueLocation::Stack(dt) => stack[(center as isize + dt) as usize],
+            ValueLocation::Local(id) => frame.get_local(id),
+            ValueLocation::Argument(id) => frame.must_get_argument(id),
+            ValueLocation::ConstString(ref s) => {
+                Value::Object(pool.allocate(Box::new(s.clone())))
+            },
+            ValueLocation::ConstNull => Value::Null,
+            ValueLocation::ConstInt(v) => Value::Int(v),
+            ValueLocation::ConstFloat(v) => Value::Float(v),
+            ValueLocation::ConstBool(v) => Value::Bool(v),
+            ValueLocation::ConstObject(id) => Value::Object(id)
+        }
+    }
 }
 
 impl OpCode {

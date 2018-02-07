@@ -96,7 +96,7 @@ pub struct Frame {
     this: Value,
     arguments: UnsafeCell<SmallVec<[Value; 4]>>,
     locals: UnsafeCell<SmallVec<[Value; 8]>>,
-    exec_stack: UnsafeCell<SmallVec<[Value; 8]>>
+    pub(crate) exec_stack: UnsafeCell<SmallVec<[Value; 8]>>
 }
 
 impl CallStack {
@@ -207,22 +207,9 @@ impl Frame {
     pub fn map_exec(&self, p: &StackMapPattern, pool: &mut ObjectPool) {
         let stack = unsafe { &mut *self.exec_stack.get() };
 
-        let center = stack.len() - 1;
         let mut new_values: SmallVec<[Value; 4]> = SmallVec::with_capacity(p.map.len());
         for loc in &p.map {
-            new_values.push(match *loc {
-                ValueLocation::Stack(dt) => stack[(center as isize + dt) as usize],
-                ValueLocation::Local(id) => self.get_local(id),
-                ValueLocation::Argument(id) => self.must_get_argument(id),
-                ValueLocation::ConstString(ref s) => {
-                    Value::Object(pool.allocate(Box::new(s.clone())))
-                },
-                ValueLocation::ConstNull => Value::Null,
-                ValueLocation::ConstInt(v) => Value::Int(v),
-                ValueLocation::ConstFloat(v) => Value::Float(v),
-                ValueLocation::ConstBool(v) => Value::Bool(v),
-                ValueLocation::ConstObject(id) => Value::Object(id)
-            });
+            new_values.push(loc.extract(self, pool));
         }
 
         if p.end_state < 0 {
