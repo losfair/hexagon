@@ -38,3 +38,6 @@ mod executor_test;
 
 #[cfg(test)]
 mod bench;
+
+#[cfg(test)]
+mod optimizer_test;

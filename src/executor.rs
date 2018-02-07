@@ -705,9 +705,6 @@ impl ExecutorImpl {
             RtOpCode::LoadObject(id) => {
                 self.get_current_frame().push_exec(Value::Object(id));
             },
-            RtOpCode::LoadValue(v) => {
-                self.get_current_frame().push_exec(v);
-            },
             RtOpCode::StackMap(ref map) => {
                 let frame = self.stack.top();
                 let pool = &mut self.object_pool;

@@ -172,7 +172,8 @@ impl BasicBlock {
                     | BasicStackOp::LoadNull
                     | BasicStackOp::GetLocal(_)
                     | BasicStackOp::GetArgument(_)
-                    | BasicStackOp::LoadObject(_) => {
+                    | BasicStackOp::LoadObject(_)
+                    | BasicStackOp::LoadThis => {
                     current += 1;
                 }
             }
@@ -251,6 +252,10 @@ impl BasicBlock {
                 BasicStackOp::LoadObject(id) => {
                     current += 1;
                     stack_map[current] = ValueLocation::ConstObject(id);
+                },
+                BasicStackOp::LoadThis => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::This;
                 }
             }
         }
@@ -291,79 +296,125 @@ impl BasicBlock {
         let mut optimized: bool = false;
 
         for i in 2..self.opcodes.len() {
-            if self.opcodes[i] == OpCode::GetField {
-                // We assume that all `LoadString`s have been transformed into
-                // `LoadObject` before this.
-                let obj_id = if let OpCode::Rt(RtOpCode::LoadObject(id)) = self.opcodes[i - 1] {
-                    Some(id)
-                } else if self.opcodes[i - 1] == OpCode::LoadThis && this.is_some() {
-                    if let Value::Object(id) = this.unwrap() {
-                        Some(id)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-                if let Some(obj_id) = obj_id {
-                    if let OpCode::Rt(RtOpCode::LoadObject(key_id)) = self.opcodes[i - 2] {
-                        let obj = pool.get_direct(obj_id);
-                        let key = pool.get_direct(key_id).to_string();
-                        if obj.has_const_field(pool, key.as_str()) {
-                            if let Some(v) = obj.get_field(pool, key.as_str()) {
-                                debug!("[transform_const_get_fields] GetField {} -> {:?}", key, v);
-                                if let Value::Object(id) = v {
-                                    rt_handles.push(id);
-                                }
-                                self.opcodes[i - 2] = OpCode::Nop;
-                                self.opcodes[i - 1] = OpCode::Nop;
-                                self.opcodes[i] = OpCode::Rt(RtOpCode::LoadValue(v));
-                                optimized = true;
-                            } else {
-                                debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
-                            }
-                        } else {
-                            debug!("[transform_const_get_fields] Field {} is not const", key);
-                        }
-                    }
-                }
-            } else if let OpCode::CallField(n_args) = self.opcodes[i] {
-                let obj_id = if let OpCode::Rt(RtOpCode::LoadObject(id)) = self.opcodes[i - 1] {
-                    Some(id)
-                } else if self.opcodes[i - 1] == OpCode::LoadThis && this.is_some() {
-                    if let Value::Object(id) = this.unwrap() {
-                        Some(id)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
-                if let Some(obj_id) = obj_id {
-                    // opcodes[i - 2] is the target `this` object
-                    if let OpCode::Rt(RtOpCode::LoadObject(key_id)) = self.opcodes[i - 3] {
-                        let obj = pool.get_direct(obj_id);
-                        let key = pool.get_direct(key_id).to_string();
-                        if obj.has_const_field(pool, key.as_str()) {
-                            if let Some(v) = obj.get_field(pool, key.as_str()) {
-                                debug!("[transform_const_get_fields] CallField {} -> {:?}", key, v);
+            if let Some(_) = BasicStackOp::from_opcode(&self.opcodes[i]) {
+                continue;
+            }
 
-                                if let Value::Object(id) = v {
-                                    rt_handles.push(id);
-                                }
-                                // Original layout: key, this, target, call_field
-                                // New layout: (none), this, target, call
-                                self.opcodes[i - 3] = OpCode::Nop;
-                                self.opcodes[i - 1] = OpCode::Rt(RtOpCode::LoadValue(v));
-                                self.opcodes[i] = OpCode::Call(n_args);
-                                optimized = true;
+            // FIXME: Remove this loop and the expensive build_stack_map calls
+            // Maybe iterators ?
+            let stack_ops: Vec<BasicStackOp> = {
+                let mut v: Vec<BasicStackOp> = Vec::new();
+                let mut i = (i - 1) as isize;
+                while i >= 0 {
+                    if let Some(op) = BasicStackOp::from_opcode(&self.opcodes[i as usize]) {
+                        v.push(op);
+                    } else {
+                        break;
+                    }
+                    i -= 1;
+                }
+                v.reverse();
+                v
+            };
+            let stack_map = BasicBlock::build_stack_map(stack_ops.as_slice());
+
+            //debug!("[transform_const_get_fields] stack_map: {:?}", stack_map);
+
+            if stack_map.map.len() >= 2 {
+                match self.opcodes[i] {
+                    OpCode::GetField => {
+                        let obj_id = if let ValueLocation::ConstObject(id) = stack_map.map[stack_map.map.len() - 1] {
+                            Some(id)
+                        } else if stack_map.map[stack_map.map.len() - 1] == ValueLocation::This && this.is_some() {
+                            if let Value::Object(id) = this.unwrap() {
+                                Some(id)
                             } else {
-                                debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
+                                None
                             }
                         } else {
-                            debug!("[transform_const_get_fields] Field {} is not const", key);
+                            None
+                        };
+
+                        if let Some(obj_id) = obj_id {
+                            if let ValueLocation::ConstObject(key_id) = stack_map.map[stack_map.map.len() - 2] {
+                                let obj = pool.get_direct(obj_id);
+                                let key = pool.get_direct(key_id).to_string();
+                                if obj.has_const_field(pool, key.as_str()) {
+                                    if let Some(v) = obj.get_field(pool, key.as_str()) {
+                                        debug!("[transform_const_get_fields] GetField {} -> {:?}", key, v);
+                                        if let Value::Object(id) = v {
+                                            rt_handles.push(id);
+                                        }
+                                        for j in 1..stack_ops.len() + 1 {
+                                            self.opcodes[i - j] = OpCode::Nop;
+                                        }
+                                        let mut stack_map = stack_map.clone();
+                                        stack_map.map.pop().unwrap();
+                                        stack_map.map.pop().unwrap();
+                                        stack_map.end_state -= 2;
+                                        self.opcodes[i - 1] = OpCode::Rt(RtOpCode::StackMap(stack_map));
+                                        self.opcodes[i] = v.to_opcode();
+                                        optimized = true;
+                                    } else {
+                                        debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
+                                    }
+                                } else {
+                                    debug!("[transform_const_get_fields] Field {} is not const", key);
+                                }
+                            }
                         }
-                    }
+                    },
+                    OpCode::CallField(n_args) if stack_map.map.len() >= 3 => {
+                        let obj_id = if let ValueLocation::ConstObject(id) = stack_map.map[stack_map.map.len() - 1] {
+                            Some(id)
+                        } else if stack_map.map[stack_map.map.len() - 1] == ValueLocation::This && this.is_some() {
+                            if let Value::Object(id) = this.unwrap() {
+                                Some(id)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        };
+                        if let Some(obj_id) = obj_id {
+                            // opcodes[i - 2] is the target `this` object
+                            if let ValueLocation::ConstObject(key_id) = stack_map.map[stack_map.map.len() - 3] {
+                                let obj = pool.get_direct(obj_id);
+                                let key = pool.get_direct(key_id).to_string();
+                                if obj.has_const_field(pool, key.as_str()) {
+                                    if let Some(v) = obj.get_field(pool, key.as_str()) {
+                                        debug!("[transform_const_get_fields] CallField {} -> {:?}", key, v);
+
+                                        if let Value::Object(id) = v {
+                                            rt_handles.push(id);
+                                        }
+                                        // Original layout: key, this, target, call_field
+                                        // New layout: this, target, call
+                                        for j in 1..stack_ops.len() + 1 {
+                                            self.opcodes[i - j] = OpCode::Nop;
+                                        }
+                                        let mut stack_map = stack_map.clone();
+
+                                        stack_map.map.pop().unwrap();
+                                        let b = stack_map.map.pop().unwrap(); // this
+                                        stack_map.map.pop().unwrap();
+                                        stack_map.map.push(b);
+                                        stack_map.end_state -= 2;
+
+                                        self.opcodes[i - 2] = OpCode::Rt(RtOpCode::StackMap(stack_map));
+                                        self.opcodes[i - 1] = v.to_opcode();
+                                        self.opcodes[i] = OpCode::Call(n_args);
+                                        optimized = true;
+                                    } else {
+                                        debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
+                                    }
+                                } else {
+                                    debug!("[transform_const_get_fields] Field {} is not const", key);
+                                }
+                            }
+                        }
+                    },
+                    _ => {}
                 }
             }
         }
@@ -390,7 +441,7 @@ impl BasicBlock {
                     let key = pool.get_direct(key_id).to_string();
                     if let Some(v) = pool.get_static_object(key.as_str()) {
                         self.opcodes[i - 1] = OpCode::Nop;
-                        self.opcodes[i] = OpCode::Rt(RtOpCode::LoadValue(*v));
+                        self.opcodes[i] = v.to_opcode();
                     }
                 }
             }
@@ -509,6 +560,7 @@ pub enum BasicStackOp {
     LoadBool(bool),
     LoadNull,
     LoadObject(usize),
+    LoadThis,
     GetArgument(usize)
 }
 
@@ -527,7 +579,8 @@ impl BasicStackOp {
             BasicStackOp::LoadNull => OpCode::LoadNull,
             BasicStackOp::GetLocal(id) => OpCode::GetLocal(id),
             BasicStackOp::GetArgument(id) => OpCode::GetArgument(id),
-            BasicStackOp::LoadObject(id) => OpCode::Rt(RtOpCode::LoadObject(id))
+            BasicStackOp::LoadObject(id) => OpCode::Rt(RtOpCode::LoadObject(id)),
+            BasicStackOp::LoadThis => OpCode::LoadThis
         }
     }
 
@@ -571,6 +624,9 @@ impl BasicStackOp {
             },
             OpCode::Rt(RtOpCode::LoadObject(id)) => {
                 Some(BasicStackOp::LoadObject(id))
+            },
+            OpCode::LoadThis => {
+                Some(BasicStackOp::LoadThis)
             },
             _ => None
         }

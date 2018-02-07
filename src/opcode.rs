@@ -76,7 +76,6 @@ pub enum OpCode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum RtOpCode {
     LoadObject(usize),
-    LoadValue(Value),
     StackMap(StackMapPattern),
     ConstCall(ValueLocation /* target */, ValueLocation /* this */, usize /* n_args */)
 }
@@ -97,7 +96,8 @@ pub enum ValueLocation {
     ConstString(String),
     ConstBool(bool),
     ConstNull,
-    ConstObject(usize)
+    ConstObject(usize),
+    This
 }
 
 impl ValueLocation {
@@ -111,6 +111,7 @@ impl ValueLocation {
             OpCode::LoadBool(v) => Some(ValueLocation::ConstBool(v)),
             OpCode::LoadNull => Some(ValueLocation::ConstNull),
             OpCode::Rt(RtOpCode::LoadObject(id)) => Some(ValueLocation::ConstObject(id)),
+            OpCode::LoadThis => Some(ValueLocation::This),
             _ => None
         }
     }
@@ -130,7 +131,8 @@ impl ValueLocation {
             ValueLocation::ConstInt(v) => Value::Int(v),
             ValueLocation::ConstFloat(v) => Value::Float(v),
             ValueLocation::ConstBool(v) => Value::Bool(v),
-            ValueLocation::ConstObject(id) => Value::Object(id)
+            ValueLocation::ConstObject(id) => Value::Object(id),
+            ValueLocation::This => frame.get_this()
         }
     }
 }
@@ -172,7 +174,7 @@ impl OpCode {
             Rotate3 => (3, 3),
             RotateReverse(n) => (n, n),
             Rt(ref op) => match *op {
-                RtOpCode::LoadObject(_) | RtOpCode::LoadValue(_) => (0, 1), // pushes the object at id
+                RtOpCode::LoadObject(_) => (0, 1), // pushes the object at id
                 RtOpCode::StackMap(ref p) => if p.end_state >= 0 {
                     (0, p.end_state as usize)
                 } else {

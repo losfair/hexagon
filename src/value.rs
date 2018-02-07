@@ -4,6 +4,7 @@ use errors;
 use object::Object;
 use object_pool::ObjectPool;
 use object_info::ObjectHandle;
+use opcode::{OpCode, RtOpCode};
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Value {
@@ -30,6 +31,16 @@ impl Value {
             panic!(errors::VMError::from(errors::RuntimeError::new(
                 format!("Not an object: {:?}", self)
             )));
+        }
+    }
+
+    pub fn to_opcode(&self) -> OpCode {
+        match *self {
+            Value::Object(id) => OpCode::Rt(RtOpCode::LoadObject(id)),
+            Value::Null => OpCode::LoadNull,
+            Value::Bool(v) => OpCode::LoadBool(v),
+            Value::Int(v) => OpCode::LoadInt(v),
+            Value::Float(v) => OpCode::LoadFloat(v)
         }
     }
 }
