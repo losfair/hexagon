@@ -128,6 +128,146 @@ impl BasicBlock {
         Ok(())
     }
 
+    pub fn build_stack_map(ops: &[BasicStackOp]) -> StackMapPattern {
+        if ops.len() == 0 {
+            return StackMapPattern {
+                map: (&[] as &[ValueLocation]).into(),
+                end_state: 0
+            };
+        }
+
+        let mut lower_bound: isize = 0;
+        let mut upper_bound: isize = 0;
+        let mut current: isize = 0;
+
+        for op in ops {
+            match *op {
+                BasicStackOp::Dup => {
+                    current += 1;
+                },
+                BasicStackOp::Pop => {
+                    current -= 1;
+                },
+                BasicStackOp::Rotate2 => {
+                    if current - 1 < lower_bound {
+                        lower_bound = current - 1;
+                    }
+                },
+                BasicStackOp::Rotate3 => {
+                    if current - 2 < lower_bound {
+                        lower_bound = current - 2;
+                    }
+                },
+                BasicStackOp::RotateReverse(n) => {
+                    let end_id = current - (n as isize - 1);
+                    if end_id < lower_bound {
+                        lower_bound = end_id;
+                    }
+                },
+                BasicStackOp::LoadInt(_)
+                    | BasicStackOp::LoadFloat(_)
+                    | BasicStackOp::LoadBool(_)
+                    | BasicStackOp::LoadString(_)
+                    | BasicStackOp::LoadNull
+                    | BasicStackOp::GetLocal(_)
+                    | BasicStackOp::GetArgument(_)
+                    | BasicStackOp::LoadObject(_) => {
+                    current += 1;
+                }
+            }
+            if current > upper_bound {
+                upper_bound = current;
+            }
+            if current < lower_bound {
+                lower_bound = current;
+            }
+        }
+        let end_state = current;
+
+        let mut stack_map: Vec<ValueLocation> = Vec::new();
+        for i in lower_bound..upper_bound + 1 {
+            stack_map.push(ValueLocation::Stack(i));
+        }
+
+        let mut current: usize = (0 - lower_bound) as usize;
+        assert!(stack_map[current] == ValueLocation::Stack(0));
+
+        for op in ops {
+            match *op {
+                BasicStackOp::Dup => {
+                    current += 1;
+                    stack_map[current] = stack_map[current - 1].clone();
+                },
+                BasicStackOp::Pop => {
+                    current -= 1;
+                },
+                BasicStackOp::Rotate2 => {
+                    stack_map.swap(current - 1, current);
+                },
+                BasicStackOp::Rotate3 => {
+                    let a = stack_map[current].clone();
+                    let b = stack_map[current - 1].clone();
+                    let c = stack_map[current - 2].clone();
+
+                    stack_map[current - 2] = b;
+                    stack_map[current - 1] = a;
+                    stack_map[current] = c;
+                },
+                BasicStackOp::RotateReverse(n) => {
+                    let mut seq: Vec<ValueLocation> = (0..n).map(|i| stack_map[current - i].clone()).collect();
+                    for i in 0..n {
+                        stack_map[current - i] = seq.pop().unwrap();
+                    }
+                },
+                BasicStackOp::GetLocal(id) => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::Local(id);
+                },
+                BasicStackOp::LoadString(ref s) => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::ConstString(s.clone());
+                },
+                BasicStackOp::LoadInt(v) => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::ConstInt(v);
+                },
+                BasicStackOp::LoadFloat(v) => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::ConstFloat(v);
+                },
+                BasicStackOp::LoadBool(v) => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::ConstBool(v);
+                },
+                BasicStackOp::LoadNull => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::ConstNull;
+                },
+                BasicStackOp::GetArgument(id) => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::Argument(id);
+                },
+                BasicStackOp::LoadObject(id) => {
+                    current += 1;
+                    stack_map[current] = ValueLocation::ConstObject(id);
+                }
+            }
+        }
+
+        let mut begin: usize = 0;
+        while begin < (end_state - lower_bound + 1) as usize {
+            if stack_map[begin] != ValueLocation::Stack(lower_bound) {
+                break;
+            }
+            begin += 1;
+        }
+
+        StackMapPattern {
+            map: (begin..(end_state - lower_bound + 1) as usize).map(|i| stack_map[i].clone()).collect(),
+            end_state: end_state
+        }
+    }
+
     pub fn rebuild_stack_patterns(&mut self) {
         fn pack_deferred_ops(ops: Vec<BasicStackOp>) -> PackResult {
             if ops.len() == 0 {
@@ -137,136 +277,8 @@ impl BasicBlock {
                 return PackResult::Restore(ops);
             }
 
-            let mut lower_bound: isize = 0;
-            let mut upper_bound: isize = 0;
-            let mut current: isize = 0;
+            let pattern = BasicBlock::build_stack_map(ops.as_slice());
 
-            for op in &ops {
-                match *op {
-                    BasicStackOp::Dup => {
-                        current += 1;
-                    },
-                    BasicStackOp::Pop => {
-                        current -= 1;
-                    },
-                    BasicStackOp::Rotate2 => {
-                        if current - 1 < lower_bound {
-                            lower_bound = current - 1;
-                        }
-                    },
-                    BasicStackOp::Rotate3 => {
-                        if current - 2 < lower_bound {
-                            lower_bound = current - 2;
-                        }
-                    },
-                    BasicStackOp::RotateReverse(n) => {
-                        let end_id = current - (n as isize - 1);
-                        if end_id < lower_bound {
-                            lower_bound = end_id;
-                        }
-                    },
-                    BasicStackOp::LoadInt(_)
-                        | BasicStackOp::LoadFloat(_)
-                        | BasicStackOp::LoadBool(_)
-                        | BasicStackOp::LoadString(_)
-                        | BasicStackOp::LoadNull
-                        | BasicStackOp::GetLocal(_)
-                        | BasicStackOp::GetArgument(_)
-                        | BasicStackOp::LoadObject(_) => {
-                        current += 1;
-                    }
-                }
-                if current > upper_bound {
-                    upper_bound = current;
-                }
-                if current < lower_bound {
-                    lower_bound = current;
-                }
-            }
-            let end_state = current;
-
-            let mut stack_map: Vec<ValueLocation> = Vec::new();
-            for i in lower_bound..upper_bound + 1 {
-                stack_map.push(ValueLocation::Stack(i));
-            }
-
-            let mut current: usize = (0 - lower_bound) as usize;
-            assert!(stack_map[current] == ValueLocation::Stack(0));
-
-            for op in &ops {
-                match *op {
-                    BasicStackOp::Dup => {
-                        current += 1;
-                        stack_map[current] = stack_map[current - 1].clone();
-                    },
-                    BasicStackOp::Pop => {
-                        current -= 1;
-                    },
-                    BasicStackOp::Rotate2 => {
-                        stack_map.swap(current - 1, current);
-                    },
-                    BasicStackOp::Rotate3 => {
-                        let a = stack_map[current].clone();
-                        let b = stack_map[current - 1].clone();
-                        let c = stack_map[current - 2].clone();
-
-                        stack_map[current - 2] = b;
-                        stack_map[current - 1] = a;
-                        stack_map[current] = c;
-                    },
-                    BasicStackOp::RotateReverse(n) => {
-                        let mut seq: Vec<ValueLocation> = (0..n).map(|i| stack_map[current - i].clone()).collect();
-                        for i in 0..n {
-                            stack_map[current - i] = seq.pop().unwrap();
-                        }
-                    },
-                    BasicStackOp::GetLocal(id) => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::Local(id);
-                    },
-                    BasicStackOp::LoadString(ref s) => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::ConstString(s.clone());
-                    },
-                    BasicStackOp::LoadInt(v) => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::ConstInt(v);
-                    },
-                    BasicStackOp::LoadFloat(v) => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::ConstFloat(v);
-                    },
-                    BasicStackOp::LoadBool(v) => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::ConstBool(v);
-                    },
-                    BasicStackOp::LoadNull => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::ConstNull;
-                    },
-                    BasicStackOp::GetArgument(id) => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::Argument(id);
-                    },
-                    BasicStackOp::LoadObject(id) => {
-                        current += 1;
-                        stack_map[current] = ValueLocation::ConstObject(id);
-                    }
-                }
-            }
-
-            let mut begin: usize = 0;
-            while begin < (end_state - lower_bound + 1) as usize {
-                if stack_map[begin] != ValueLocation::Stack(lower_bound) {
-                    break;
-                }
-                begin += 1;
-            }
-
-            let pattern = StackMapPattern {
-                map: (begin..(end_state - lower_bound + 1) as usize).map(|i| stack_map[i].clone()).collect(),
-                end_state: end_state
-            };
             if pattern.map.len() == 0 && pattern.end_state == 0 {
                 debug!("[pack_deferred_ops] No-op detected");
                 return PackResult::Noop;
@@ -289,47 +301,9 @@ impl BasicBlock {
         for op in &self.opcodes {
             let (n_pops, n_pushes) = op.get_stack_depth_change();
 
-            match *op {
-                OpCode::Dup => {
-                    deferred_stack_ops.push(BasicStackOp::Dup);
-                },
-                OpCode::Pop => {
-                    deferred_stack_ops.push(BasicStackOp::Pop);
-                },
-                OpCode::Rotate2 => {
-                    deferred_stack_ops.push(BasicStackOp::Rotate2);
-                },
-                OpCode::Rotate3 => {
-                    deferred_stack_ops.push(BasicStackOp::Rotate3);
-                },
-                OpCode::RotateReverse(n) => {
-                    deferred_stack_ops.push(BasicStackOp::RotateReverse(n));
-                },
-                OpCode::LoadInt(v) => {
-                    deferred_stack_ops.push(BasicStackOp::LoadInt(v));
-                },
-                OpCode::LoadFloat(v) => {
-                    deferred_stack_ops.push(BasicStackOp::LoadFloat(v));
-                },
-                OpCode::LoadString(ref s) => {
-                    deferred_stack_ops.push(BasicStackOp::LoadString(s.clone()));
-                },
-                OpCode::LoadBool(v) => {
-                    deferred_stack_ops.push(BasicStackOp::LoadBool(v));
-                },
-                OpCode::LoadNull => {
-                    deferred_stack_ops.push(BasicStackOp::LoadNull);
-                },
-                OpCode::GetLocal(id) => {
-                    deferred_stack_ops.push(BasicStackOp::GetLocal(id));
-                },
-                OpCode::GetArgument(id) => {
-                    deferred_stack_ops.push(BasicStackOp::GetArgument(id));
-                },
-                OpCode::Rt(RtOpCode::LoadObject(id)) => {
-                    deferred_stack_ops.push(BasicStackOp::LoadObject(id));
-                },
-                _ => {
+            match BasicStackOp::from_opcode(op) {
+                Some(v) => deferred_stack_ops.push(v),
+                None => {
                     let packed = pack_deferred_ops(::std::mem::replace(&mut deferred_stack_ops, Vec::new()));
                     match packed {
                         PackResult::OkWithResult(v) => {
@@ -393,7 +367,7 @@ impl Default for ValueInfo {
 }
 
 #[derive(Clone, Debug)]
-enum BasicStackOp {
+pub enum BasicStackOp {
     Dup,
     Pop,
     Rotate2,
@@ -410,7 +384,7 @@ enum BasicStackOp {
 }
 
 impl BasicStackOp {
-    fn to_opcode(&self) -> OpCode {
+    pub fn to_opcode(&self) -> OpCode {
         match *self {
             BasicStackOp::Dup => OpCode::Dup,
             BasicStackOp::Pop => OpCode::Pop,
@@ -425,6 +399,51 @@ impl BasicStackOp {
             BasicStackOp::GetLocal(id) => OpCode::GetLocal(id),
             BasicStackOp::GetArgument(id) => OpCode::GetArgument(id),
             BasicStackOp::LoadObject(id) => OpCode::Rt(RtOpCode::LoadObject(id))
+        }
+    }
+
+    pub fn from_opcode(op: &OpCode) -> Option<BasicStackOp> {
+        match *op {
+            OpCode::Dup => {
+                Some(BasicStackOp::Dup)
+            },
+            OpCode::Pop => {
+                Some(BasicStackOp::Pop)
+            },
+            OpCode::Rotate2 => {
+                Some(BasicStackOp::Rotate2)
+            },
+            OpCode::Rotate3 => {
+                Some(BasicStackOp::Rotate3)
+            },
+            OpCode::RotateReverse(n) => {
+                Some(BasicStackOp::RotateReverse(n))
+            },
+            OpCode::LoadInt(v) => {
+                Some(BasicStackOp::LoadInt(v))
+            },
+            OpCode::LoadFloat(v) => {
+                Some(BasicStackOp::LoadFloat(v))
+            },
+            OpCode::LoadString(ref s) => {
+                Some(BasicStackOp::LoadString(s.clone()))
+            },
+            OpCode::LoadBool(v) => {
+                Some(BasicStackOp::LoadBool(v))
+            },
+            OpCode::LoadNull => {
+                Some(BasicStackOp::LoadNull)
+            },
+            OpCode::GetLocal(id) => {
+                Some(BasicStackOp::GetLocal(id))
+            },
+            OpCode::GetArgument(id) => {
+                Some(BasicStackOp::GetArgument(id))
+            },
+            OpCode::Rt(RtOpCode::LoadObject(id)) => {
+                Some(BasicStackOp::LoadObject(id))
+            },
+            _ => None
         }
     }
 }
