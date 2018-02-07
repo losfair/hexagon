@@ -298,6 +298,7 @@ impl BasicBlock {
                         let key = pool.get_direct(key_id).to_string();
                         if obj.has_const_field(key.as_str()) {
                             if let Some(v) = obj.get_field(pool, key.as_str()) {
+                                debug!("[transform_const_get_fields] GetField {} -> {:?}", key, v);
                                 if let Value::Object(id) = v {
                                     rt_handles.push(id);
                                 }
@@ -316,6 +317,8 @@ impl BasicBlock {
                         let key = pool.get_direct(key_id).to_string();
                         if obj.has_const_field(key.as_str()) {
                             if let Some(v) = obj.get_field(pool, key.as_str()) {
+                                debug!("[transform_const_get_fields] CallField {} -> {:?}", key, v);
+
                                 if let Value::Object(id) = v {
                                     rt_handles.push(id);
                                 }
