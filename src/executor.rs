@@ -705,10 +705,27 @@ impl ExecutorImpl {
             RtOpCode::LoadObject(id) => {
                 self.get_current_frame().push_exec(Value::Object(id));
             },
+            RtOpCode::LoadValue(v) => {
+                self.get_current_frame().push_exec(v);
+            },
             RtOpCode::StackMap(ref map) => {
                 let frame = self.stack.top();
                 let pool = &mut self.object_pool;
                 frame.map_exec(map, pool);
+            },
+            RtOpCode::ConstCall(ref target, ref this, n_args) => {
+                let frame = self.stack.top();
+                let pool = &mut self.object_pool;
+
+                let target = target.extract(&*frame, pool);
+                let this = this.extract(&*frame, pool);
+
+                let mut args: SmallVec<[Value; 4]> = SmallVec::with_capacity(n_args);
+                for _ in 0..n_args {
+                    args.push(frame.pop_exec());
+                }
+
+                self.invoke(target, this, None, args.as_slice());
             }
         }
     }
@@ -721,6 +738,7 @@ impl ExecutorImpl {
 
         for op in &bb.opcodes {
             match *op {
+                OpCode::Nop => {},
                 OpCode::LoadNull => {
                     self.get_current_frame().push_exec(Value::Null);
                 },

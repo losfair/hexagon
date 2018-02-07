@@ -10,6 +10,7 @@ use value::Value;
 /// creation.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub enum OpCode {
+    Nop,
     LoadNull,
     LoadInt(i64),
     LoadFloat(f64),
@@ -75,7 +76,9 @@ pub enum OpCode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum RtOpCode {
     LoadObject(usize),
-    StackMap(StackMapPattern)
+    LoadValue(Value),
+    StackMap(StackMapPattern),
+    ConstCall(ValueLocation /* target */, ValueLocation /* this */, usize /* n_args */)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -98,6 +101,20 @@ pub enum ValueLocation {
 }
 
 impl ValueLocation {
+    pub fn from_opcode(op: &OpCode) -> Option<ValueLocation> {
+        match *op {
+            OpCode::GetLocal(id) => Some(ValueLocation::Local(id)),
+            OpCode::GetArgument(id) => Some(ValueLocation::Argument(id)),
+            OpCode::LoadInt(v) => Some(ValueLocation::ConstInt(v)),
+            OpCode::LoadFloat(v) => Some(ValueLocation::ConstFloat(v)),
+            OpCode::LoadString(ref v) => Some(ValueLocation::ConstString(v.clone())),
+            OpCode::LoadBool(v) => Some(ValueLocation::ConstBool(v)),
+            OpCode::LoadNull => Some(ValueLocation::ConstNull),
+            OpCode::Rt(RtOpCode::LoadObject(id)) => Some(ValueLocation::ConstObject(id)),
+            _ => None
+        }
+    }
+
     pub fn extract(&self, frame: &Frame, pool: &mut ObjectPool) -> Value {
         let stack = unsafe { &mut *frame.exec_stack.get() };
         let center = stack.len() - 1;
@@ -124,6 +141,7 @@ impl OpCode {
 
         // (pop, push)
         match *self {
+            Nop => (0, 0),
             LoadNull | LoadInt(_) | LoadFloat(_) | LoadString(_) | LoadBool(_) | LoadThis => (0, 1), // pushes the value
             Pop => (1, 0), // pops the object on the top
             Dup => (0, 1), // duplicates the object on the top
@@ -154,12 +172,13 @@ impl OpCode {
             Rotate3 => (3, 3),
             RotateReverse(n) => (n, n),
             Rt(ref op) => match *op {
-                RtOpCode::LoadObject(_) => (0, 1), // pushes the object at id
+                RtOpCode::LoadObject(_) | RtOpCode::LoadValue(_) => (0, 1), // pushes the object at id
                 RtOpCode::StackMap(ref p) => if p.end_state >= 0 {
                     (0, p.end_state as usize)
                 } else {
                     ((-p.end_state) as usize, 0)
-                }
+                },
+                RtOpCode::ConstCall(_, _, n_args) => (n_args, 1) // pops arguments, pushes the result
             }
         }
     }

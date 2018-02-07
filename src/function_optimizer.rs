@@ -28,9 +28,14 @@ impl<'a> FunctionOptimizer<'a> {
         // Const string information will be lost after this;
         self.optimize_string_load();
 
-        // Most stack push / pop information will be lost after this;
-        // So this should be the last optimization.
+        // Run optimizations on each basic block
         for bb in self.basic_blocks.iter_mut() {
+            bb.transform_const_get_fields(self.rt_handles, self.pool);
+            bb.transform_const_calls();
+            bb.remove_nops();
+
+            // Some stack pushes / pops will be removed after this
+            // so this should be the last optimization
             bb.rebuild_stack_patterns();
         }
 

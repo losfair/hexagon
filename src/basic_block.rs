@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use opcode::{OpCode, RtOpCode, StackMapPattern, ValueLocation};
+use object_pool::ObjectPool;
 use errors;
 use value::Value;
 
@@ -265,6 +266,49 @@ impl BasicBlock {
         StackMapPattern {
             map: (begin..(end_state - lower_bound + 1) as usize).map(|i| stack_map[i].clone()).collect(),
             end_state: end_state
+        }
+    }
+
+    pub fn transform_const_calls(&mut self) {
+        for i in 2..self.opcodes.len() {
+            if let OpCode::Call(n_args) = self.opcodes[i] {
+                if let Some(target_loc) = ValueLocation::from_opcode(&self.opcodes[i - 1]) {
+                    if let Some(this_loc) = ValueLocation::from_opcode(&self.opcodes[i - 2]) {
+                        self.opcodes[i - 2] = OpCode::Nop;
+                        self.opcodes[i - 1] = OpCode::Nop;
+                        self.opcodes[i] = OpCode::Rt(RtOpCode::ConstCall(target_loc, this_loc, n_args));
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn remove_nops(&mut self) {
+        self.opcodes.retain(|v| *v != OpCode::Nop);
+    }
+
+    pub fn transform_const_get_fields(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool) {
+        for i in 2..self.opcodes.len() {
+            if self.opcodes[i] == OpCode::GetField {
+                // We assume that all `LoadString`s have been transformed into
+                // `LoadObject` before this.
+                if let OpCode::Rt(RtOpCode::LoadObject(obj_id)) = self.opcodes[i - 1] {
+                    if let OpCode::Rt(RtOpCode::LoadObject(key_id)) = self.opcodes[i - 2] {
+                        let obj = pool.get_direct(obj_id);
+                        let key = pool.get_direct(key_id).to_string();
+                        if obj.has_const_field(key.as_str()) {
+                            if let Some(v) = obj.get_field(pool, key.as_str()) {
+                                if let Value::Object(id) = v {
+                                    rt_handles.push(id);
+                                }
+                                self.opcodes[i - 2] = OpCode::Nop;
+                                self.opcodes[i - 1] = OpCode::Nop;
+                                self.opcodes[i] = OpCode::Rt(RtOpCode::LoadValue(v));
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
