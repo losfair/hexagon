@@ -308,6 +308,52 @@ impl BasicBlock {
                         }
                     }
                 }
+            } else if let OpCode::CallField(n_args) = self.opcodes[i] {
+                if let OpCode::Rt(RtOpCode::LoadObject(obj_id)) = self.opcodes[i - 1] {
+                    // opcodes[i - 2] is the `this` object
+                    if let OpCode::Rt(RtOpCode::LoadObject(key_id)) = self.opcodes[i - 3] {
+                        let obj = pool.get_direct(obj_id);
+                        let key = pool.get_direct(key_id).to_string();
+                        if obj.has_const_field(key.as_str()) {
+                            if let Some(v) = obj.get_field(pool, key.as_str()) {
+                                if let Value::Object(id) = v {
+                                    rt_handles.push(id);
+                                }
+                                // Original layout: key, this, target, call_field
+                                // New layout: (none), this, target, call
+                                self.opcodes[i - 3] = OpCode::Nop;
+                                self.opcodes[i - 1] = OpCode::Rt(RtOpCode::LoadValue(v));
+                                self.opcodes[i] = OpCode::Call(n_args);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn transform_const_string_loads(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool) {
+        for op in &mut self.opcodes {
+            if let OpCode::LoadString(ref s) = *op {
+                let s = s.clone();
+                let obj_id = pool.allocate(Box::new(s));
+                rt_handles.push(obj_id);
+                *op = OpCode::Rt(RtOpCode::LoadObject(obj_id));
+            }
+        }
+    }
+
+    pub fn transform_const_static_loads(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool) {
+        for i in 1..self.opcodes.len() {
+            if self.opcodes[i] == OpCode::GetStatic {
+                // We assume the LoadString -> LoadObject trans. is already done.
+                if let OpCode::Rt(RtOpCode::LoadObject(key_id)) = self.opcodes[i - 1] {
+                    let key = pool.get_direct(key_id).to_string();
+                    if let Some(v) = pool.get_static_object(key.as_str()) {
+                        self.opcodes[i - 1] = OpCode::Nop;
+                        self.opcodes[i] = OpCode::Rt(RtOpCode::LoadValue(*v));
+                    }
+                }
             }
         }
     }

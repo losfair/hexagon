@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::collections::HashMap;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use object::Object;
 use object_pool::ObjectPool;
 use value::{Value, ValueContext};
@@ -9,7 +9,8 @@ use errors::{VMError, RuntimeError};
 
 pub struct DynamicObject {
     prototype: Option<usize>,
-    fields: RefCell<HashMap<String, Value>>
+    fields: RefCell<HashMap<String, Value>>,
+    frozen: Cell<bool>
 }
 
 impl Object for DynamicObject {
@@ -48,7 +49,14 @@ impl Object for DynamicObject {
         }
     }
 
+    fn has_const_field(&self, _name: &str) -> bool {
+        self.frozen.get()
+    }
+
     fn set_field(&self, name: &str, value: Value) {
+        if self.frozen.get() {
+            panic!(VMError::from("Attempting to set field on a frozen dynamic object"));
+        }
         self.fields.borrow_mut().insert(name.to_string(), value);
     }
 
@@ -68,7 +76,12 @@ impl DynamicObject {
     pub fn new(prototype: Option<usize>) -> DynamicObject {
         DynamicObject {
             prototype: prototype,
-            fields: RefCell::new(HashMap::new())
+            fields: RefCell::new(HashMap::new()),
+            frozen: Cell::new(false)
         }
+    }
+
+    pub fn freeze(&self) {
+        self.frozen.set(true);
     }
 }

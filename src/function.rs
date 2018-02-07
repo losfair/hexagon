@@ -1,4 +1,5 @@
 use std::any::Any;
+use std::cell::RefCell;
 use object::Object;
 use object_pool::ObjectPool;
 use basic_block::BasicBlock;
@@ -8,7 +9,7 @@ use function_optimizer::FunctionOptimizer;
 use value::Value;
 
 pub enum Function {
-    Virtual(VirtualFunction),
+    Virtual(RefCell<VirtualFunction>),
     Native(NativeFunction)
 }
 
@@ -27,16 +28,12 @@ pub type NativeFunction = Box<Fn(&mut ExecutorImpl) -> Value>;
 
 impl Object for Function {
     fn initialize(&mut self, pool: &mut ObjectPool) {
-        if let Function::Virtual(ref mut f) = *self {
-            if f.should_optimize {
-                f.optimize(pool);
-            }
-        }
+        self.static_optimize(pool);
     }
 
     fn get_children(&self) -> Vec<usize> {
         match *self {
-            Function::Virtual(ref f) => f.rt_handles.clone(),
+            Function::Virtual(ref f) => f.borrow().rt_handles.clone(),
             Function::Native(_) => Vec::new()
         }
     }
@@ -52,7 +49,7 @@ impl Object for Function {
     fn call(&self, executor: &mut ExecutorImpl) -> Value {
         match *self {
             Function::Virtual(ref vf) => {
-                executor.eval_basic_blocks(vf.basic_blocks.as_slice(), 0)
+                executor.eval_basic_blocks(vf.borrow().basic_blocks.as_slice(), 0)
             },
             Function::Native(ref nf) => {
                 nf(executor)
@@ -73,12 +70,12 @@ impl Function {
             panic!(errors::VMError::from(e))
         });
 
-        Function::Virtual(vf)
+        Function::Virtual(RefCell::new(vf))
     }
 
     pub fn enable_optimization(&mut self) {
         if let Function::Virtual(ref mut f) = *self {
-            f.should_optimize = true;
+            f.borrow_mut().should_optimize = true;
         }
     }
 
@@ -89,7 +86,7 @@ impl Function {
     pub fn to_virtual_info(&self) -> Option<VirtualFunctionInfo> {
         match *self {
             Function::Virtual(ref vf) => Some(VirtualFunctionInfo {
-                basic_blocks: vf.basic_blocks.clone()
+                basic_blocks: vf.borrow().basic_blocks.clone()
             }),
             Function::Native(_) => None
         }
@@ -98,12 +95,40 @@ impl Function {
     pub fn from_virtual_info(vinfo: VirtualFunctionInfo) -> Self {
         Function::from_basic_blocks(vinfo.basic_blocks)
     }
+
+    // Require `&mut self` here even if not enforced
+    // to ensure logical correctness.
+    pub fn static_optimize(&mut self, pool: &mut ObjectPool) {
+        if let Function::Virtual(ref f) = *self {
+            let mut f = f.borrow_mut();
+            if f.should_optimize {
+                f.static_optimize(pool);
+            }
+        }
+    }
+
+    pub fn dynamic_optimize(&self, pool: &mut ObjectPool) {
+        if let Function::Virtual(ref f) = *self {
+            if let Ok(mut f) = f.try_borrow_mut() {
+                if f.should_optimize {
+                    f.dynamic_optimize(pool);
+                }
+            } else {
+                panic!(errors::VMError::from("Cannot optimize virtual functions within itself"));
+            }
+        }
+    }
 }
 
 impl VirtualFunction {
-    fn optimize(&mut self, pool: &mut ObjectPool) {
+    fn static_optimize(&mut self, pool: &mut ObjectPool) {
         let mut optimizer = FunctionOptimizer::new(&mut self.basic_blocks, &mut self.rt_handles, pool);
-        optimizer.optimize();
+        optimizer.static_optimize();
+    }
+
+    fn dynamic_optimize(&mut self, pool: &mut ObjectPool) {
+        let mut optimizer = FunctionOptimizer::new(&mut self.basic_blocks, &mut self.rt_handles, pool);
+        optimizer.dynamic_optimize();
     }
 
     pub fn validate(&self) -> Result<(), errors::ValidateError> {

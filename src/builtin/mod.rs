@@ -3,6 +3,7 @@ pub mod dynamic_object;
 
 use std::any::Any;
 use object::Object;
+use function::Function;
 use value::{Value, ValueContext};
 use executor::ExecutorImpl;
 use errors::{VMError, FieldNotFoundError};
@@ -48,6 +49,24 @@ impl Object for BuiltinObject {
                 Value::Object(executor.get_object_pool_mut().allocate(
                     Box::new(dynamic_object::DynamicObject::new(prototype))
                 ))
+            },
+            "freeze_dynamic" => {
+                let target_id = match executor.get_current_frame().must_get_argument(0) {
+                    Value::Object(id) => id,
+                    _ => panic!(VMError::from("Invalid target object"))
+                };
+                let target: &dynamic_object::DynamicObject = executor.get_object_pool().must_get_direct_typed(target_id);
+                target.freeze();
+                Value::Null
+            },
+            "optimize" => {
+                let target_id = match executor.get_current_frame().must_get_argument(0) {
+                    Value::Object(id) => id,
+                    _ => panic!(VMError::from("Invalid target object"))
+                };
+                let target = executor.get_object_pool().must_get_typed::<Function>(target_id);
+                target.dynamic_optimize(executor.get_object_pool_mut());
+                Value::Null
             },
             "add" => {
                 generic_arithmetic::exec_add(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
