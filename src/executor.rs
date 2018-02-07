@@ -144,9 +144,10 @@ impl ExecutorImpl {
             let target = frame.pop_exec();
             let this = frame.pop_exec();
 
-            let args: SmallVec<[Value; 4]> = (0..n_args)
-                .map(|_| frame.pop_exec())
-                .collect();
+            let mut args: SmallVec<[Value; 4]> = SmallVec::with_capacity(n_args);
+            for _ in 0..n_args {
+                args.push(frame.pop_exec());
+            }
 
             (target, this, args)
         };
@@ -161,9 +162,10 @@ impl ExecutorImpl {
             let this = frame.pop_exec();
             let field_name = frame.pop_exec();
 
-            let args: SmallVec<[Value; 4]> = (0..n_args)
-                .map(|_| frame.pop_exec())
-                .collect();
+            let mut args: SmallVec<[Value; 4]> = SmallVec::with_capacity(n_args);
+            for _ in 0..n_args {
+                args.push(frame.pop_exec());
+            }
 
             (target, this, field_name, args)
         };
