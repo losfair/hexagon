@@ -726,6 +726,22 @@ impl ExecutorImpl {
                 }
 
                 self.invoke(target, this, None, args.as_slice());
+            },
+            RtOpCode::ConstGetField(target, key) => {
+                let frame = self.stack.top();
+                let pool = &self.object_pool;
+
+                let target_obj = pool.get_direct(target);
+                let key = ValueContext::new(
+                    &key,
+                    pool
+                ).as_object_direct().to_str();
+
+                if let Some(v) = target_obj.get_field(pool, key) {
+                    frame.push_exec(v);
+                } else {
+                    frame.push_exec(Value::Null);
+                }
             }
         }
     }

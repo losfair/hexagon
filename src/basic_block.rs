@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use opcode::{OpCode, RtOpCode, StackMapPattern, ValueLocation};
 use object_pool::ObjectPool;
+use object::Object;
 use errors;
 use value::Value;
 
@@ -313,6 +314,37 @@ impl BasicBlock {
     }
 
     pub fn transform_const_get_fields(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool, this: Option<Value>) -> bool {
+        fn const_get_field_to_opcode(obj: &Object, key: &str, pool: &ObjectPool, rt_handles: &mut Vec<usize>) -> Option<OpCode> {
+            if obj.has_const_field(pool, key) {
+                if let Some(v) = obj.get_field(pool, key) {
+                    debug!("[transform_const_get_fields] GetField/CallField {} -> {:?}", key, v);
+                    if let Value::Object(id) = v {
+                        rt_handles.push(id);
+                    }
+                    Some(v.to_opcode())
+                } else {
+                    debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
+                    None
+                }
+            } else {
+                debug!("[transform_const_get_fields] Field {} is not const", key);
+                None
+            }
+        }
+        fn extract_object_id(loc: &ValueLocation, this: &Option<Value>) -> Option<usize> {
+            if let ValueLocation::ConstObject(id) = *loc {
+                Some(id)
+            } else if *loc == ValueLocation::This && this.is_some() {
+                if let Value::Object(id) = this.unwrap() {
+                    Some(id)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        }
+
         let mut optimized: bool = false;
 
         for i in 2..self.opcodes.len() {
@@ -343,93 +375,72 @@ impl BasicBlock {
             if stack_map.map.len() >= 2 {
                 match self.opcodes[i] {
                     OpCode::GetField => {
-                        let obj_id = if let ValueLocation::ConstObject(id) = stack_map.map[stack_map.map.len() - 1] {
-                            Some(id)
-                        } else if stack_map.map[stack_map.map.len() - 1] == ValueLocation::This && this.is_some() {
-                            if let Value::Object(id) = this.unwrap() {
-                                Some(id)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
-
+                        let obj_id = extract_object_id(&stack_map.map[stack_map.map.len() - 1], &this);
                         if let Some(obj_id) = obj_id {
                             if let ValueLocation::ConstObject(key_id) = stack_map.map[stack_map.map.len() - 2] {
                                 let obj = pool.get_direct(obj_id);
                                 let key = pool.get_direct(key_id).to_string();
-                                if obj.has_const_field(pool, key.as_str()) {
-                                    if let Some(v) = obj.get_field(pool, key.as_str()) {
-                                        debug!("[transform_const_get_fields] GetField {} -> {:?}", key, v);
-                                        if let Value::Object(id) = v {
-                                            rt_handles.push(id);
-                                        }
-                                        for j in 1..stack_ops.len() + 1 {
-                                            self.opcodes[i - j] = OpCode::Nop;
-                                        }
-                                        let mut stack_map = stack_map.clone();
-                                        stack_map.map.pop().unwrap();
-                                        stack_map.map.pop().unwrap();
-                                        stack_map.end_state -= 2;
-                                        self.opcodes[i - 1] = OpCode::Rt(RtOpCode::StackMap(stack_map));
-                                        self.opcodes[i] = v.to_opcode();
-                                        optimized = true;
-                                    } else {
-                                        debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
+                                let mut target_opcode: Option<OpCode> = const_get_field_to_opcode(
+                                    obj,
+                                    key.as_str(),
+                                    pool,
+                                    rt_handles
+                                );
+
+                                if target_opcode.is_none() {
+                                    target_opcode = Some(OpCode::Rt(RtOpCode::ConstGetField(
+                                        obj_id,
+                                        Value::Object(key_id)
+                                    )));
+                                }
+
+                                if let Some(op) = target_opcode {
+                                    for j in 1..stack_ops.len() + 1 {
+                                        self.opcodes[i - j] = OpCode::Nop;
                                     }
-                                } else {
-                                    debug!("[transform_const_get_fields] Field {} is not const", key);
+                                    let mut stack_map = stack_map.clone();
+                                    stack_map.map.pop().unwrap();
+                                    stack_map.map.pop().unwrap();
+                                    stack_map.end_state -= 2;
+                                    self.opcodes[i - 1] = OpCode::Rt(RtOpCode::StackMap(stack_map));
+                                    self.opcodes[i] = op;
+                                    optimized = true;
                                 }
                             }
                         }
                     },
                     OpCode::CallField(n_args) if stack_map.map.len() >= 3 => {
-                        let obj_id = if let ValueLocation::ConstObject(id) = stack_map.map[stack_map.map.len() - 1] {
-                            Some(id)
-                        } else if stack_map.map[stack_map.map.len() - 1] == ValueLocation::This && this.is_some() {
-                            if let Value::Object(id) = this.unwrap() {
-                                Some(id)
-                            } else {
-                                None
-                            }
-                        } else {
-                            None
-                        };
+                        let obj_id = extract_object_id(&stack_map.map[stack_map.map.len() - 1], &this);
                         if let Some(obj_id) = obj_id {
                             // opcodes[i - 2] is the target `this` object
                             if let ValueLocation::ConstObject(key_id) = stack_map.map[stack_map.map.len() - 3] {
                                 let obj = pool.get_direct(obj_id);
                                 let key = pool.get_direct(key_id).to_string();
-                                if obj.has_const_field(pool, key.as_str()) {
-                                    if let Some(v) = obj.get_field(pool, key.as_str()) {
-                                        debug!("[transform_const_get_fields] CallField {} -> {:?}", key, v);
+                                let mut target_opcode: Option<OpCode> = const_get_field_to_opcode(
+                                    obj,
+                                    key.as_str(),
+                                    pool,
+                                    rt_handles
+                                );
 
-                                        if let Value::Object(id) = v {
-                                            rt_handles.push(id);
-                                        }
-                                        // Original layout: key, this, target, call_field
-                                        // New layout: this, target, call
-                                        for j in 1..stack_ops.len() + 1 {
-                                            self.opcodes[i - j] = OpCode::Nop;
-                                        }
-                                        let mut stack_map = stack_map.clone();
-
-                                        stack_map.map.pop().unwrap();
-                                        let b = stack_map.map.pop().unwrap(); // this
-                                        stack_map.map.pop().unwrap();
-                                        stack_map.map.push(b);
-                                        stack_map.end_state -= 2;
-
-                                        self.opcodes[i - 2] = OpCode::Rt(RtOpCode::StackMap(stack_map));
-                                        self.opcodes[i - 1] = v.to_opcode();
-                                        self.opcodes[i] = OpCode::Call(n_args);
-                                        optimized = true;
-                                    } else {
-                                        debug!("[transform_const_get_fields] Field {} is marked as const but has no value", key);
+                                if let Some(op) = target_opcode {
+                                    // Original layout: key, this, target, call_field
+                                    // New layout: this, target, call
+                                    for j in 1..stack_ops.len() + 1 {
+                                        self.opcodes[i - j] = OpCode::Nop;
                                     }
-                                } else {
-                                    debug!("[transform_const_get_fields] Field {} is not const", key);
+                                    let mut stack_map = stack_map.clone();
+
+                                    stack_map.map.pop().unwrap();
+                                    let b = stack_map.map.pop().unwrap(); // this
+                                    stack_map.map.pop().unwrap();
+                                    stack_map.map.push(b);
+                                    stack_map.end_state -= 2;
+
+                                    self.opcodes[i - 2] = OpCode::Rt(RtOpCode::StackMap(stack_map));
+                                    self.opcodes[i - 1] = op;
+                                    self.opcodes[i] = OpCode::Call(n_args);
+                                    optimized = true;
                                 }
                             }
                         }

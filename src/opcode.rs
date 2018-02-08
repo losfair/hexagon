@@ -78,7 +78,8 @@ pub enum RtOpCode {
     LoadObject(usize),
     BulkLoad(SmallVec<[Value; 4]>),
     StackMap(StackMapPattern),
-    ConstCall(ValueLocation /* target */, ValueLocation /* this */, usize /* n_args */)
+    ConstCall(ValueLocation /* target */, ValueLocation /* this */, usize /* n_args */),
+    ConstGetField(usize /* object id */, Value /* key */)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -245,7 +246,8 @@ impl OpCode {
                 } else {
                     ((-p.end_state) as usize, 0)
                 },
-                RtOpCode::ConstCall(_, _, n_args) => (n_args, 1) // pops arguments, pushes the result
+                RtOpCode::ConstCall(_, _, n_args) => (n_args, 1), // pops arguments, pushes the result
+                RtOpCode::ConstGetField(_, _) => (0, 1) // pushes the object
             }
         }
     }
