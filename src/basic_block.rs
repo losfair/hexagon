@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::collections::HashMap;
 use opcode::{OpCode, RtOpCode, StackMapPattern, ValueLocation};
 use object_pool::ObjectPool;
 use object::Object;
@@ -272,6 +273,53 @@ impl BasicBlock {
         StackMapPattern {
             map: (begin..(end_state - lower_bound + 1) as usize).map(|i| stack_map[i].clone()).collect(),
             end_state: end_state
+        }
+    }
+
+    pub fn transform_const_block_locals(&mut self) {
+        let mut locals: HashMap<usize, Value> = HashMap::new();
+        for i in 1..self.opcodes.len() {
+            if let OpCode::GetLocal(id) = self.opcodes[i] {
+                if let Some(v) = locals.get(&id) {
+                    debug!("[transform_const_block_locals] Replacing GetLocal({}) with const value {:?}", id, v);
+                    self.opcodes[i] = v.to_opcode();
+                }
+                continue;
+            }
+
+            let local_id = match self.opcodes[i] {
+                OpCode::SetLocal(id) => id,
+                _ => {
+                    continue;
+                }
+            };
+
+            if let Some(_) = locals.remove(&local_id) {
+                debug!("[transform_const_block_locals] Lifetime of const value for local {} ends", local_id);
+            }
+
+            let stack_ops: Vec<BasicStackOp> = {
+                let mut v: Vec<BasicStackOp> = Vec::new();
+                let mut i = (i - 1) as isize;
+                while i >= 0 {
+                    if let Some(op) = BasicStackOp::from_opcode(&self.opcodes[i as usize]) {
+                        v.push(op);
+                    } else {
+                        break;
+                    }
+                    i -= 1;
+                }
+                v.reverse();
+                v
+            };
+            let stack_map = BasicBlock::build_stack_map(stack_ops.as_slice());
+
+            if stack_map.map.len() >= 1 {
+                if let Some(v) = stack_map.map[stack_map.map.len() - 1].to_value() {
+                    locals.insert(local_id, v);
+                    debug!("[transform_const_block_locals] Lifetime of const value for local {} begins", local_id);
+                }
+            }
         }
     }
 

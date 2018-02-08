@@ -27,25 +27,29 @@ impl<'a> FunctionOptimizer<'a> {
     }
 
     pub fn static_optimize(&mut self) {
-        // Run optimizations on each basic block
-        for bb in self.basic_blocks.iter_mut() {
-            // LoadString -> LoadObject
-            bb.transform_const_string_loads(self.rt_handles, self.pool);
+        for _ in 0..3 {
+            self.transform_const_locals();
 
-            // (LoadObject, GetStatic) -> LoadValue
-            bb.transform_const_static_loads(self.rt_handles, self.pool);
+            // Run optimizations on each basic block
+            for bb in self.basic_blocks.iter_mut() {
+                // LoadString -> LoadObject
+                bb.transform_const_string_loads(self.rt_handles, self.pool);
 
-            while bb.transform_const_get_fields(self.rt_handles, self.pool, self.binded_this) {
-                bb.flatten_stack_maps();
+                // (LoadObject, GetStatic) -> LoadValue
+                bb.transform_const_static_loads(self.rt_handles, self.pool);
+
+                while bb.transform_const_get_fields(self.rt_handles, self.pool, self.binded_this) {
+                    bb.flatten_stack_maps();
+                    bb.remove_nops();
+                }
+                bb.transform_const_calls();
                 bb.remove_nops();
             }
-            bb.transform_const_calls();
-            bb.remove_nops();
+        }
 
+        // These should only run once
+        for bb in self.basic_blocks.iter_mut() {
             bb.build_bulk_loads();
-
-            // Some stack pushes / pops will be removed after this
-            // so this should be the last optimization
             bb.rebuild_stack_patterns();
         }
 
@@ -68,6 +72,12 @@ impl<'a> FunctionOptimizer<'a> {
             bb.remove_nops();
 
             bb.build_bulk_loads();
+        }
+    }
+
+    pub fn transform_const_locals(&mut self) {
+        for bb in self.basic_blocks.iter_mut() {
+            bb.transform_const_block_locals();
         }
     }
 

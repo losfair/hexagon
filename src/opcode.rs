@@ -175,6 +175,17 @@ impl ValueLocation {
             ValueLocation::This => frame.get_this()
         }
     }
+
+    pub fn to_value(&self) -> Option<Value> {
+        match *self {
+            ValueLocation::ConstNull => Some(Value::Null),
+            ValueLocation::ConstInt(v) => Some(Value::Int(v)),
+            ValueLocation::ConstFloat(v) => Some(Value::Float(v)),
+            ValueLocation::ConstBool(v) => Some(Value::Bool(v)),
+            ValueLocation::ConstObject(v) => Some(Value::Object(v)),
+            _ => None
+        }
+    }
 }
 
 impl OpCode {
