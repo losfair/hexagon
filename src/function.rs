@@ -86,6 +86,9 @@ impl Function {
                     panic!(errors::VMError::from("Cannot rebind this"));
                 }
                 f.this = Some(this);
+                if let Value::Object(id) = this {
+                    f.rt_handles.push(id);
+                }
             } else {
                 panic!(errors::VMError::from("Cannot bind from inside the function"));
             }
