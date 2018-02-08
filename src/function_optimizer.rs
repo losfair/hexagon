@@ -42,6 +42,8 @@ impl<'a> FunctionOptimizer<'a> {
             bb.transform_const_calls();
             bb.remove_nops();
 
+            bb.build_bulk_loads();
+
             // Some stack pushes / pops will be removed after this
             // so this should be the last optimization
             bb.rebuild_stack_patterns();
@@ -64,6 +66,8 @@ impl<'a> FunctionOptimizer<'a> {
             }
             bb.transform_const_calls();
             bb.remove_nops();
+
+            bb.build_bulk_loads();
         }
     }
 

@@ -76,6 +76,7 @@ pub enum OpCode {
 #[derive(Clone, Debug, PartialEq)]
 pub enum RtOpCode {
     LoadObject(usize),
+    BulkLoad(SmallVec<[Value; 4]>),
     StackMap(StackMapPattern),
     ConstCall(ValueLocation /* target */, ValueLocation /* this */, usize /* n_args */)
 }
@@ -176,6 +177,31 @@ impl ValueLocation {
 }
 
 impl OpCode {
+    pub fn from_value(v: Value) -> OpCode {
+        use self::OpCode::*;
+
+        match v {
+            Value::Null => LoadNull,
+            Value::Bool(v) => LoadBool(v),
+            Value::Int(v) => LoadInt(v),
+            Value::Float(v) => LoadFloat(v),
+            Value::Object(v) => Rt(RtOpCode::LoadObject(v))
+        }
+    }
+
+    pub fn to_value(&self) -> Option<Value> {
+        use self::OpCode::*;
+
+        match *self {
+            LoadNull => Some(Value::Null),
+            LoadBool(v) => Some(Value::Bool(v)),
+            LoadInt(v) => Some(Value::Int(v)),
+            LoadFloat(v) => Some(Value::Float(v)),
+            Rt(RtOpCode::LoadObject(id)) => Some(Value::Object(id)),
+            _ => None
+        }
+    }
+
     pub fn get_stack_depth_change(&self) -> (usize, usize) {
         use self::OpCode::*;
 
@@ -213,6 +239,7 @@ impl OpCode {
             RotateReverse(n) => (n, n),
             Rt(ref op) => match *op {
                 RtOpCode::LoadObject(_) => (0, 1), // pushes the object at id
+                RtOpCode::BulkLoad(ref values) => (0, values.len()), // pushes all the values
                 RtOpCode::StackMap(ref p) => if p.end_state >= 0 {
                     (0, p.end_state as usize)
                 } else {

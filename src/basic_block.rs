@@ -468,6 +468,42 @@ impl BasicBlock {
         }
     }
 
+    pub fn build_bulk_loads(&mut self) {
+        fn build(values: Vec<Value>, target: &mut Vec<OpCode>) {
+            if !values.is_empty() {
+                if values.len() >= 3 {
+                    debug!("[build_bulk_loads] Packing sequence: {:?}", values);
+                    target.push(OpCode::Rt(RtOpCode::BulkLoad(values.into())));
+                } else {
+                    debug!("[build_bulk_loads] Not packing sequence: {:?}", values);
+                    for v in values {
+                        target.push(OpCode::from_value(v));
+                    }
+                }
+            }
+        }
+
+        let mut deferred_values: Vec<Value> = Vec::new();
+        let mut new_opcodes: Vec<OpCode> = Vec::new();
+
+        for op in &self.opcodes {
+            if let Some(v) = op.to_value() {
+                deferred_values.push(v);
+            } else {
+                build(
+                    ::std::mem::replace(&mut deferred_values, Vec::new()),
+                    &mut new_opcodes
+                );
+                new_opcodes.push(op.clone());
+            }
+        }
+        build(
+            ::std::mem::replace(&mut deferred_values, Vec::new()),
+            &mut new_opcodes
+        );
+        self.opcodes = new_opcodes;
+    }
+
     pub fn rebuild_stack_patterns(&mut self) {
         fn pack_deferred_ops(ops: Vec<BasicStackOp>) -> PackResult {
             if ops.len() == 0 {

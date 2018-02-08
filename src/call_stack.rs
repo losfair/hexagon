@@ -228,6 +228,14 @@ impl Frame {
         }
     }
 
+    pub fn bulk_load(&self, values: &[Value]) {
+        let stack = unsafe { &mut *self.exec_stack.get() };
+        stack.reserve(values.len());
+        for v in values {
+            stack.push(*v);
+        }
+    }
+
     pub fn reset_locals(&self, n_slots: usize) {
         let locals = unsafe { &mut *self.locals.get() };
         locals.clear();
