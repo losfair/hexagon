@@ -1,5 +1,6 @@
 pub mod array;
 pub mod dynamic_object;
+pub mod typed_array;
 
 use std::any::Any;
 use object::Object;
@@ -8,6 +9,8 @@ use value::{Value, ValueContext};
 use executor::ExecutorImpl;
 use errors::{VMError, FieldNotFoundError};
 use generic_arithmetic;
+use self::typed_array::TypedArray;
+use self::typed_array::TypedArrayElement;
 
 pub struct BuiltinObject {
 
@@ -67,6 +70,54 @@ impl Object for BuiltinObject {
                 let target = executor.get_object_pool().must_get_typed::<Function>(target_id);
                 target.dynamic_optimize(executor.get_object_pool_mut());
                 Value::Null
+            },
+            "new_typed_array" => {
+                let type_name = ValueContext::new(
+                    &executor.get_current_frame().must_get_argument(0),
+                    executor.get_object_pool()
+                ).to_str().to_string();
+                let size = ValueContext::new(
+                    &executor.get_current_frame().must_get_argument(1),
+                    executor.get_object_pool()
+                ).to_i64() as usize;
+                let default_value = executor.get_current_frame().must_get_argument(2);
+
+                let obj_id = executor.get_object_pool_mut().allocate(match type_name.as_str() {
+                    "i8" => Box::new(TypedArray::new(
+                        i8::must_from_value(default_value),
+                        size
+                    )),
+                    "u8" => Box::new(TypedArray::new(
+                        u8::must_from_value(default_value),
+                        size
+                    )),
+                    "i16" => Box::new(TypedArray::new(
+                        i16::must_from_value(default_value),
+                        size
+                    )),
+                    "u16" => Box::new(TypedArray::new(
+                        u16::must_from_value(default_value),
+                        size
+                    )),
+                    "i32" => Box::new(TypedArray::new(
+                        i32::must_from_value(default_value),
+                        size
+                    )),
+                    "u32" => Box::new(TypedArray::new(
+                        u32::must_from_value(default_value),
+                        size
+                    )),
+                    "i64" => Box::new(TypedArray::new(
+                        i64::must_from_value(default_value),
+                        size
+                    )),
+                    "u64" => Box::new(TypedArray::new(
+                        u64::must_from_value(default_value),
+                        size
+                    )),
+                    _ => panic!(VMError::from("Unknown type"))
+                });
+                Value::Object(obj_id)
             },
             "add" => {
                 generic_arithmetic::exec_add(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
