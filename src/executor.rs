@@ -701,7 +701,7 @@ impl ExecutorImpl {
             }
         } else {
             let mut t = Vec::with_capacity(n);
-            for i in 0..n {
+            for _ in 0..n {
                 t.push(frame.pop_exec());
             }
             for i in 0..n {

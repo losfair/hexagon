@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::collections::HashMap;
 use opcode::{OpCode, RtOpCode, StackMapPattern, ValueLocation};
 use object_pool::ObjectPool;
@@ -508,7 +507,7 @@ impl BasicBlock {
         }
     }
 
-    pub fn transform_const_static_loads(&mut self, rt_handles: &mut Vec<usize>, pool: &mut ObjectPool) {
+    pub fn transform_const_static_loads(&mut self, _rt_handles: &mut Vec<usize>, pool: &mut ObjectPool) {
         for i in 1..self.opcodes.len() {
             if self.opcodes[i] == OpCode::GetStatic {
                 // We assume the LoadString -> LoadObject trans. is already done.
@@ -590,8 +589,6 @@ impl BasicBlock {
         let mut deferred_stack_ops: Vec<BasicStackOp> = Vec::new();
 
         for op in &self.opcodes {
-            let (n_pops, n_pushes) = op.get_stack_depth_change();
-
             match BasicStackOp::from_opcode(op) {
                 Some(v) => deferred_stack_ops.push(v),
                 None => {
@@ -633,28 +630,6 @@ enum PackResult {
     OkWithResult(OpCode),
     Noop,
     Restore(Vec<BasicStackOp>)
-}
-
-struct ValueInfo {
-    kind: ValueType,
-    const_val: Option<Value>
-}
-
-enum ValueType {
-    Any,
-    Int,
-    Float,
-    Bool,
-    Null
-}
-
-impl Default for ValueInfo {
-    fn default() -> ValueInfo {
-        ValueInfo {
-            kind: ValueType::Any,
-            const_val: None
-        }
-    }
 }
 
 #[derive(Clone, Debug)]

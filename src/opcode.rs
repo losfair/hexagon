@@ -241,7 +241,7 @@ impl OpCode {
                 }
                 Ok(())
             },
-            OpCode::Select(ref t, ref left, ref right) => {
+            OpCode::Select(_, ref left, ref right) => {
                 validate_select_opcode_sequence!(left);
                 validate_select_opcode_sequence!(right);
                 Ok(())

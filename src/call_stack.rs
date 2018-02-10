@@ -6,7 +6,7 @@ use std::ops::{Deref, DerefMut};
 use smallvec::SmallVec;
 use errors;
 use value::Value;
-use opcode::{StackMapPattern, ValueLocation};
+use opcode::StackMapPattern;
 use object_pool::ObjectPool;
 
 thread_local! {

@@ -1,7 +1,5 @@
 use std::collections::{HashSet, BTreeSet};
 use basic_block::BasicBlock;
-use opcode::{OpCode, RtOpCode};
-use object::Object;
 use object_pool::ObjectPool;
 use value::Value;
 
@@ -86,7 +84,7 @@ impl<'a> FunctionOptimizer<'a> {
             return;
         }
 
-        let mut n_basic_blocks: usize = self.basic_blocks.len();
+        let n_basic_blocks: usize = self.basic_blocks.len();
 
         let mut out_edges: Vec<HashSet<usize>> = vec! [ HashSet::new(); n_basic_blocks ];
         let mut in_edges: Vec<HashSet<usize>> = vec! [ HashSet::new(); n_basic_blocks ];
@@ -175,7 +173,7 @@ impl<'a> FunctionOptimizer<'a> {
                     }
                 }
             }
-            n_basic_blocks = self.basic_blocks.len();
+            //n_basic_blocks = self.basic_blocks.len();
         }
     }
 }
