@@ -6,7 +6,7 @@ use executor::ExecutorImpl;
 use errors::{VMError, FieldNotFoundError};
 
 pub struct Array {
-    elements: RefCell<Vec<Value>>
+    pub elements: RefCell<Vec<Value>>
 }
 
 impl Array {

@@ -120,13 +120,14 @@ impl Function {
         Function::from_basic_blocks(vinfo.basic_blocks)
     }
 
-    // Require `&mut self` here even if not enforced
-    // to ensure logical correctness.
-    pub fn static_optimize(&mut self, pool: &mut ObjectPool) {
+    pub fn static_optimize(&self, pool: &mut ObjectPool) {
         if let Function::Virtual(ref f) = *self {
-            let mut f = f.borrow_mut();
-            if f.should_optimize {
-                f.static_optimize(pool);
+            if let Ok(mut f) = f.try_borrow_mut() {
+                if f.should_optimize {
+                    f.static_optimize(pool);
+                }
+            } else {
+                panic!(errors::VMError::from("Cannot optimize virtual functions within itself"));
             }
         }
     }
