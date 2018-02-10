@@ -873,27 +873,33 @@ impl ExecutorImpl {
                 return Some(EvalControlMessage::Return(ret_val));
             },
             OpCode::Add => {
-                let ret = generic_arithmetic::exec_add(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let (left, right) = (self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let ret = generic_arithmetic::exec_add(self, left, right);
                 self.get_current_frame().push_exec(ret);
             },
             OpCode::Sub => {
-                let ret = generic_arithmetic::exec_sub(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let (left, right) = (self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let ret = generic_arithmetic::exec_sub(self, left, right);
                 self.get_current_frame().push_exec(ret);
             },
             OpCode::Mul => {
-                let ret = generic_arithmetic::exec_mul(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let (left, right) = (self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let ret = generic_arithmetic::exec_mul(self, left, right);
                 self.get_current_frame().push_exec(ret);
             },
             OpCode::Div => {
-                let ret = generic_arithmetic::exec_div(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let (left, right) = (self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let ret = generic_arithmetic::exec_div(self, left, right);
                 self.get_current_frame().push_exec(ret);
             },
             OpCode::Mod => {
-                let ret = generic_arithmetic::exec_mod(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let (left, right) = (self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let ret = generic_arithmetic::exec_mod(self, left, right);
                 self.get_current_frame().push_exec(ret);
             },
             OpCode::Pow => {
-                let ret = generic_arithmetic::exec_pow(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let (left, right) = (self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                let ret = generic_arithmetic::exec_pow(self, left, right);
                 self.get_current_frame().push_exec(ret);
             },
             OpCode::IntAdd => {

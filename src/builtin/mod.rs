@@ -120,22 +120,28 @@ impl Object for BuiltinObject {
                 Value::Object(obj_id)
             },
             "add" => {
-                generic_arithmetic::exec_add(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
+                let (left, right) = (executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1));
+                generic_arithmetic::exec_add(executor, left, right)
             },
             "sub" => {
-                generic_arithmetic::exec_sub(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
+                let (left, right) = (executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1));
+                generic_arithmetic::exec_sub(executor, left, right)
             },
             "mul" => {
-                generic_arithmetic::exec_mul(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
+                let (left, right) = (executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1));
+                generic_arithmetic::exec_mul(executor, left, right)
             },
             "div" => {
-                generic_arithmetic::exec_div(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
+                let (left, right) = (executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1));
+                generic_arithmetic::exec_div(executor, left, right)
             },
             "mod" => {
-                generic_arithmetic::exec_mod(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
+                let (left, right) = (executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1));
+                generic_arithmetic::exec_mod(executor, left, right)
             },
             "pow" => {
-                generic_arithmetic::exec_pow(executor, executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1))
+                let (left, right) = (executor.get_current_frame().must_get_argument(0), executor.get_current_frame().must_get_argument(1));
+                generic_arithmetic::exec_pow(executor, left, right)
             },
             _ => panic!(VMError::from(FieldNotFoundError::from_field_name(name)))
         }

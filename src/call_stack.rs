@@ -224,7 +224,9 @@ impl Frame {
         }
 
         for i in 0..new_values.len() {
-            stack[stack.len() - 1 - i] = new_values[new_values.len() - 1 - i];
+            let sv_id = stack.len() - 1 - i;
+            let nv_id = new_values.len() - 1 - i;
+            stack[sv_id] = new_values[nv_id];
         }
     }
 

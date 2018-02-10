@@ -29,7 +29,8 @@ impl BasicBlock {
             return false;
         }
 
-        let last_opcode = &mut self.opcodes[self.opcodes.len() - 1];
+        let last_opcode_id = self.opcodes.len() - 1;
+        let last_opcode = &mut self.opcodes[last_opcode_id];
         match *last_opcode {
             OpCode::ConditionalBranch(if_true, if_false) => {
                 if if_true == from || if_false == from {
