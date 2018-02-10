@@ -3,7 +3,7 @@ use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
 use std::cmp::Ordering;
 use object::Object;
 use call_stack::{CallStack, FrameHandle};
-use opcode::{OpCode, RtOpCode};
+use opcode::{OpCode, RtOpCode, SelectType};
 use errors;
 use basic_block::BasicBlock;
 use object_pool::ObjectPool;
@@ -43,6 +43,16 @@ pub struct ExecutorImpl {
 enum EvalControlMessage {
     Return(Value),
     Redirect(usize)
+}
+
+macro_rules! eval_select_opcode_sequence {
+    ($self:ident, $seq:expr) => (for op in $seq {
+        if $self._eval_opcode(op).is_some() {
+            panic!(errors::VMError::from(
+                "Attempting to modify the control flow from inside a Select block"
+            ));
+        }
+    })
 }
 
 impl ExecutorImpl {
@@ -746,6 +756,284 @@ impl ExecutorImpl {
         }
     }
 
+    fn _eval_opcode(&mut self, op: &OpCode) -> Option<EvalControlMessage> {
+        match *op {
+            OpCode::Nop => {},
+            OpCode::LoadNull => {
+                self.get_current_frame().push_exec(Value::Null);
+            },
+            OpCode::LoadInt(value) => {
+                self.get_current_frame().push_exec(Value::Int(value));
+            },
+            OpCode::LoadFloat(value) => {
+                self.get_current_frame().push_exec(Value::Float(value));
+            },
+            OpCode::LoadBool(value) => {
+                self.get_current_frame().push_exec(Value::Bool(value));
+            },
+            OpCode::LoadString(ref value) => {
+                let obj = self.object_pool.allocate(Box::new(value.clone()));
+                self.get_current_frame().push_exec(Value::Object(obj));
+            },
+            OpCode::LoadThis => {
+                let frame = self.get_current_frame();
+                frame.push_exec(frame.get_this());
+            },
+            OpCode::Call(n_args) => {
+                self._call_impl(n_args);
+            },
+            OpCode::CallField(n_args) => {
+                self._call_field_impl(n_args);
+            },
+            OpCode::Pop => {
+                self.get_current_frame().pop_exec();
+            },
+            OpCode::Dup => {
+                self.get_current_frame().dup_exec();
+            },
+            OpCode::InitLocal(n_slots) => {
+                let frame = self.get_current_frame();
+                frame.reset_locals(n_slots);
+            },
+            OpCode::GetLocal(ind) => {
+                let frame = self.get_current_frame();
+                let ret = frame.get_local(ind);
+                frame.push_exec(ret);
+            },
+            OpCode::SetLocal(ind) => {
+                let frame = self.get_current_frame();
+                let value = frame.pop_exec();
+                frame.set_local(ind, value);
+            },
+            OpCode::GetArgument(ind) => {
+                let frame = self.get_current_frame();
+                frame.push_exec(frame.must_get_argument(ind));
+            },
+            OpCode::GetNArguments => {
+                let frame = self.get_current_frame();
+                frame.push_exec(Value::Int(frame.get_n_arguments() as i64));
+            },
+            OpCode::GetStatic => {
+                let frame = self.stack.top();
+                let pool = &self.object_pool;
+
+                let key_val = frame.pop_exec();
+                let key = ValueContext::new(
+                    &key_val,
+                    pool
+                ).as_object_direct().to_str();
+                let maybe_target_obj = self.get_static_object(key).map(|v| *v);
+
+                if let Some(target_obj) = maybe_target_obj {
+                    frame.push_exec(target_obj);
+                } else {
+                    frame.push_exec(Value::Null);
+                }
+            },
+            OpCode::SetStatic => {
+                let frame = self.stack.top();
+                let pool = &self.object_pool;
+
+                let key_val = frame.pop_exec();
+                let key = ValueContext::new(
+                    &key_val,
+                    pool
+                ).as_object_direct().to_string();
+
+                let value = frame.pop_exec();
+
+                self.set_static_object(key, value);
+            },
+            OpCode::GetField => {
+                self._get_field_impl();
+            },
+            OpCode::SetField => {
+                self._set_field_impl();
+            },
+            OpCode::Branch(target_id) => {
+                return Some(EvalControlMessage::Redirect(target_id));
+            },
+            OpCode::ConditionalBranch(if_true, if_false) => {
+                let condition_is_true = {
+                    let frame = self.get_current_frame();
+                    ValueContext::new(
+                        &frame.pop_exec(),
+                        self.get_object_pool()
+                    ).to_bool()
+                };
+
+                return Some(EvalControlMessage::Redirect(if condition_is_true {
+                    if_true
+                } else {
+                    if_false
+                }));
+            },
+            OpCode::Return => {
+                let ret_val = self.get_current_frame().pop_exec();
+                return Some(EvalControlMessage::Return(ret_val));
+            },
+            OpCode::Add => {
+                let ret = generic_arithmetic::exec_add(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                self.get_current_frame().push_exec(ret);
+            },
+            OpCode::Sub => {
+                let ret = generic_arithmetic::exec_sub(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                self.get_current_frame().push_exec(ret);
+            },
+            OpCode::Mul => {
+                let ret = generic_arithmetic::exec_mul(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                self.get_current_frame().push_exec(ret);
+            },
+            OpCode::Div => {
+                let ret = generic_arithmetic::exec_div(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                self.get_current_frame().push_exec(ret);
+            },
+            OpCode::Mod => {
+                let ret = generic_arithmetic::exec_mod(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                self.get_current_frame().push_exec(ret);
+            },
+            OpCode::Pow => {
+                let ret = generic_arithmetic::exec_pow(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
+                self.get_current_frame().push_exec(ret);
+            },
+            OpCode::IntAdd => {
+                self._int_add_impl();
+            },
+            OpCode::IntSub => {
+                self._int_sub_impl();
+            },
+            OpCode::IntMul => {
+                self._int_mul_impl();
+            },
+            OpCode::IntDiv => {
+                self._int_div_impl();
+            },
+            OpCode::IntMod => {
+                self._int_mod_impl();
+            },
+            OpCode::IntPow => {
+                self._int_pow_impl();
+            },
+            OpCode::FloatAdd => {
+                self._float_add_impl();
+            },
+            OpCode::FloatSub => {
+                self._float_sub_impl();
+            },
+            OpCode::FloatMul => {
+                self._float_mul_impl();
+            },
+            OpCode::FloatDiv => {
+                self._float_div_impl();
+            },
+            OpCode::FloatPowi => {
+                self._float_powi_impl();
+            },
+            OpCode::FloatPowf => {
+                self._float_powf_impl();
+            },
+            OpCode::StringAdd => {
+                self._string_add_impl();
+            },
+            OpCode::CastToFloat => {
+                self._cast_to_float_impl();
+            },
+            OpCode::CastToInt => {
+                self._cast_to_int_impl();
+            },
+            OpCode::CastToBool => {
+                self._cast_to_bool_impl();
+            },
+            OpCode::CastToString => {
+                self._cast_to_string_impl();
+            },
+            OpCode::And => {
+                self._and_impl();
+            },
+            OpCode::Or => {
+                self._or_impl();
+            },
+            OpCode::Not => {
+                self._not_impl();
+            },
+            OpCode::TestLt => {
+                self._test_lt_impl();
+            },
+            OpCode::TestLe => {
+                self._test_le_impl();
+            },
+            OpCode::TestEq => {
+                self._test_eq_impl();
+            },
+            OpCode::TestNe => {
+                self._test_ne_impl();
+            },
+            OpCode::TestGe => {
+                self._test_ge_impl();
+            },
+            OpCode::TestGt => {
+                self._test_gt_impl();
+            },
+            OpCode::Rotate2 => {
+                self._rotate2_impl();
+            },
+            OpCode::Rotate3 => {
+                self._rotate3_impl();
+            },
+            OpCode::RotateReverse(n) => {
+                self._rotate_reverse_impl(n);
+            },
+            OpCode::Rt(ref op) => {
+                self._rt_dispatch_impl(op);
+            },
+            OpCode::Select(ref t, ref left, ref right) => {
+                eval_select_opcode_sequence!(self, left);
+                let left_val = ValueContext::new(
+                    &self.stack.top().pop_exec(),
+                    &self.object_pool
+                ).to_bool();
+
+                let result = match *t {
+                    SelectType::And => {
+                        if left_val {
+                            eval_select_opcode_sequence!(self, right);
+                            let v = ValueContext::new(
+                                &self.stack.top().pop_exec(),
+                                &self.object_pool
+                            ).to_bool();
+                            if v {
+                                true
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    },
+                    SelectType::Or => {
+                        if !left_val {
+                            eval_select_opcode_sequence!(self, right);
+                            let v = ValueContext::new(
+                                &self.stack.top().pop_exec(),
+                                &self.object_pool
+                            ).to_bool();
+                            if !v {
+                                false
+                            } else {
+                                true
+                            }
+                        } else {
+                            true
+                        }
+                    }
+                };
+                self.stack.top().push_exec(Value::Bool(result));
+            }
+        }
+
+        None
+    }
+
     fn eval_basic_blocks_impl(&mut self, bb: &BasicBlock) -> EvalControlMessage {
         if self.object_pool.get_alloc_count() >= 1000 {
             self.object_pool.reset_alloc_count();
@@ -753,235 +1041,8 @@ impl ExecutorImpl {
         }
 
         for op in &bb.opcodes {
-            match *op {
-                OpCode::Nop => {},
-                OpCode::LoadNull => {
-                    self.get_current_frame().push_exec(Value::Null);
-                },
-                OpCode::LoadInt(value) => {
-                    self.get_current_frame().push_exec(Value::Int(value));
-                },
-                OpCode::LoadFloat(value) => {
-                    self.get_current_frame().push_exec(Value::Float(value));
-                },
-                OpCode::LoadBool(value) => {
-                    self.get_current_frame().push_exec(Value::Bool(value));
-                },
-                OpCode::LoadString(ref value) => {
-                    let obj = self.object_pool.allocate(Box::new(value.clone()));
-                    self.get_current_frame().push_exec(Value::Object(obj));
-                },
-                OpCode::LoadThis => {
-                    let frame = self.get_current_frame();
-                    frame.push_exec(frame.get_this());
-                },
-                OpCode::Call(n_args) => {
-                    self._call_impl(n_args);
-                },
-                OpCode::CallField(n_args) => {
-                    self._call_field_impl(n_args);
-                },
-                OpCode::Pop => {
-                    self.get_current_frame().pop_exec();
-                },
-                OpCode::Dup => {
-                    self.get_current_frame().dup_exec();
-                },
-                OpCode::InitLocal(n_slots) => {
-                    let frame = self.get_current_frame();
-                    frame.reset_locals(n_slots);
-                },
-                OpCode::GetLocal(ind) => {
-                    let frame = self.get_current_frame();
-                    let ret = frame.get_local(ind);
-                    frame.push_exec(ret);
-                },
-                OpCode::SetLocal(ind) => {
-                    let frame = self.get_current_frame();
-                    let value = frame.pop_exec();
-                    frame.set_local(ind, value);
-                },
-                OpCode::GetArgument(ind) => {
-                    let frame = self.get_current_frame();
-                    frame.push_exec(frame.must_get_argument(ind));
-                },
-                OpCode::GetNArguments => {
-                    let frame = self.get_current_frame();
-                    frame.push_exec(Value::Int(frame.get_n_arguments() as i64));
-                },
-                OpCode::GetStatic => {
-                    let frame = self.stack.top();
-                    let pool = &self.object_pool;
-
-                    let key_val = frame.pop_exec();
-                    let key = ValueContext::new(
-                        &key_val,
-                        pool
-                    ).as_object_direct().to_str();
-                    let maybe_target_obj = self.get_static_object(key).map(|v| *v);
-
-                    if let Some(target_obj) = maybe_target_obj {
-                        frame.push_exec(target_obj);
-                    } else {
-                        frame.push_exec(Value::Null);
-                    }
-                },
-                OpCode::SetStatic => {
-                    let frame = self.stack.top();
-                    let pool = &self.object_pool;
-
-                    let key_val = frame.pop_exec();
-                    let key = ValueContext::new(
-                        &key_val,
-                        pool
-                    ).as_object_direct().to_string();
-
-                    let value = frame.pop_exec();
-
-                    self.set_static_object(key, value);
-                },
-                OpCode::GetField => {
-                    self._get_field_impl();
-                },
-                OpCode::SetField => {
-                    self._set_field_impl();
-                },
-                OpCode::Branch(target_id) => {
-                    return EvalControlMessage::Redirect(target_id);
-                },
-                OpCode::ConditionalBranch(if_true, if_false) => {
-                    let condition_is_true = {
-                        let frame = self.get_current_frame();
-                        ValueContext::new(
-                            &frame.pop_exec(),
-                            self.get_object_pool()
-                        ).to_bool()
-                    };
-
-                    return EvalControlMessage::Redirect(if condition_is_true {
-                        if_true
-                    } else {
-                        if_false
-                    });
-                },
-                OpCode::Return => {
-                    let ret_val = self.get_current_frame().pop_exec();
-                    return EvalControlMessage::Return(ret_val);
-                },
-                OpCode::Add => {
-                    let ret = generic_arithmetic::exec_add(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
-                    self.get_current_frame().push_exec(ret);
-                },
-                OpCode::Sub => {
-                    let ret = generic_arithmetic::exec_sub(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
-                    self.get_current_frame().push_exec(ret);
-                },
-                OpCode::Mul => {
-                    let ret = generic_arithmetic::exec_mul(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
-                    self.get_current_frame().push_exec(ret);
-                },
-                OpCode::Div => {
-                    let ret = generic_arithmetic::exec_div(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
-                    self.get_current_frame().push_exec(ret);
-                },
-                OpCode::Mod => {
-                    let ret = generic_arithmetic::exec_mod(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
-                    self.get_current_frame().push_exec(ret);
-                },
-                OpCode::Pow => {
-                    let ret = generic_arithmetic::exec_pow(self, self.get_current_frame().pop_exec(), self.get_current_frame().pop_exec());
-                    self.get_current_frame().push_exec(ret);
-                },
-                OpCode::IntAdd => {
-                    self._int_add_impl();
-                },
-                OpCode::IntSub => {
-                    self._int_sub_impl();
-                },
-                OpCode::IntMul => {
-                    self._int_mul_impl();
-                },
-                OpCode::IntDiv => {
-                    self._int_div_impl();
-                },
-                OpCode::IntMod => {
-                    self._int_mod_impl();
-                },
-                OpCode::IntPow => {
-                    self._int_pow_impl();
-                },
-                OpCode::FloatAdd => {
-                    self._float_add_impl();
-                },
-                OpCode::FloatSub => {
-                    self._float_sub_impl();
-                },
-                OpCode::FloatMul => {
-                    self._float_mul_impl();
-                },
-                OpCode::FloatDiv => {
-                    self._float_div_impl();
-                },
-                OpCode::FloatPowi => {
-                    self._float_powi_impl();
-                },
-                OpCode::FloatPowf => {
-                    self._float_powf_impl();
-                },
-                OpCode::StringAdd => {
-                    self._string_add_impl();
-                },
-                OpCode::CastToFloat => {
-                    self._cast_to_float_impl();
-                },
-                OpCode::CastToInt => {
-                    self._cast_to_int_impl();
-                },
-                OpCode::CastToBool => {
-                    self._cast_to_bool_impl();
-                },
-                OpCode::CastToString => {
-                    self._cast_to_string_impl();
-                },
-                OpCode::And => {
-                    self._and_impl();
-                },
-                OpCode::Or => {
-                    self._or_impl();
-                },
-                OpCode::Not => {
-                    self._not_impl();
-                },
-                OpCode::TestLt => {
-                    self._test_lt_impl();
-                },
-                OpCode::TestLe => {
-                    self._test_le_impl();
-                },
-                OpCode::TestEq => {
-                    self._test_eq_impl();
-                },
-                OpCode::TestNe => {
-                    self._test_ne_impl();
-                },
-                OpCode::TestGe => {
-                    self._test_ge_impl();
-                },
-                OpCode::TestGt => {
-                    self._test_gt_impl();
-                },
-                OpCode::Rotate2 => {
-                    self._rotate2_impl();
-                },
-                OpCode::Rotate3 => {
-                    self._rotate3_impl();
-                },
-                OpCode::RotateReverse(n) => {
-                    self._rotate_reverse_impl(n);
-                },
-                OpCode::Rt(ref op) => {
-                    self._rt_dispatch_impl(op);
-                }
+            if let Some(msg) = self._eval_opcode(op) {
+                return msg;
             }
         }
 

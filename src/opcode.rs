@@ -2,6 +2,7 @@ use smallvec::SmallVec;
 use call_stack::Frame;
 use object_pool::ObjectPool;
 use value::Value;
+use errors::ValidateError;
 
 /// Hexagon VM opcodes.
 ///
@@ -69,8 +70,18 @@ pub enum OpCode {
     Rotate3,
     RotateReverse(usize),
 
+    // used for short-circuiting operations
+    // both blocks must pop no value and produce exactly one value
+    Select(SelectType, Vec<OpCode>, Vec<OpCode>),
+
     #[serde(skip_serializing, skip_deserializing)]
     Rt(RtOpCode)
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub enum SelectType {
+    And,
+    Or
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -188,7 +199,57 @@ impl ValueLocation {
     }
 }
 
+macro_rules! validate_select_opcode_sequence {
+    ($seq:expr) => ({
+        {
+            let mut stack_depth: isize = 0;
+            for op in $seq {
+                op.validate(false)?;
+                let (n_pops, n_pushes) = op.get_stack_depth_change();
+                stack_depth -= n_pops as isize;
+                if stack_depth < 0 {
+                    return Err(ValidateError::new("Stack underflow"));
+                }
+                stack_depth += n_pushes as isize;
+            }
+            if stack_depth != 1 {
+                return Err(ValidateError::new("Expecting exactly one value"));
+            }
+        }
+    })
+}
+
 impl OpCode {
+    pub fn modifies_control_flow(&self) -> bool {
+        match *self {
+            OpCode::Branch(_) | OpCode::ConditionalBranch(_, _) | OpCode::Return => true,
+            _ => false
+        }
+    }
+
+    pub fn validate(&self, allow_modify_control_flow: bool) -> Result<(), ValidateError> {
+        if !allow_modify_control_flow {
+            if self.modifies_control_flow() {
+                return Err(ValidateError::new("Modifying control flow is not allowed here"));
+            }
+        }
+
+        match *self {
+            OpCode::RotateReverse(n) => {
+                if n <= 0 {
+                    return Err(ValidateError::new("RotateReverse only accepts an operand greater than zero"));
+                }
+                Ok(())
+            },
+            OpCode::Select(ref t, ref left, ref right) => {
+                validate_select_opcode_sequence!(left);
+                validate_select_opcode_sequence!(right);
+                Ok(())
+            },
+            _ => Ok(())
+        }
+    }
+
     pub fn from_value(v: Value) -> OpCode {
         use self::OpCode::*;
 
@@ -249,6 +310,7 @@ impl OpCode {
             Rotate2 => (2, 2),
             Rotate3 => (3, 3),
             RotateReverse(n) => (n, n),
+            Select(_, _, _) => (0, 1), // pushes exactly one value
             Rt(ref op) => match *op {
                 RtOpCode::LoadObject(_) => (0, 1), // pushes the object at id
                 RtOpCode::BulkLoad(ref values) => (0, values.len()), // pushes all the values

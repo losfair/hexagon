@@ -88,11 +88,7 @@ impl BasicBlock {
                 }
             }
 
-            if let OpCode::RotateReverse(n) = *op {
-                if n <= 0 {
-                    return Err(errors::ValidateError::new("RotateReverse only accepts an operand greater than zero"));
-                }
-            }
+            op.validate(true)?;
 
             let (n_pops, n_pushes) = op.get_stack_depth_change();
 
