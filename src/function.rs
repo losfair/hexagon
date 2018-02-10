@@ -25,7 +25,7 @@ pub struct VirtualFunctionInfo {
     pub basic_blocks: Vec<BasicBlock>
 }
 
-pub type NativeFunction = Box<Fn(&mut ExecutorImpl) -> Value>;
+pub type NativeFunction = Box<Fn(&mut ExecutorImpl) -> Value + Send>;
 
 impl Object for Function {
     fn initialize(&mut self, pool: &mut ObjectPool) {

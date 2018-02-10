@@ -5,8 +5,6 @@ pub struct VMError {
     inner: Box<Object>
 }
 
-unsafe impl Send for VMError {}
-
 impl<T> From<T> for VMError where T: Object + 'static {
     fn from(other: T) -> VMError {
         VMError {

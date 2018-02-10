@@ -24,7 +24,7 @@ pub mod executor;
 pub mod function_optimizer;
 pub mod function;
 pub mod generic_arithmetic;
-pub mod hybrid_bridge;
+//pub mod hybrid_bridge;
 pub mod object_info;
 pub mod object_pool;
 pub mod object;

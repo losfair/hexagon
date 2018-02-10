@@ -15,7 +15,7 @@ use value::{Value, ValueContext};
 /// to object pool, it should be done in the `initialize` method,
 /// which takes a mutable reference to the object pool and makes
 /// it possible to do preparations e.g. creating built-in fields.
-pub trait Object {
+pub trait Object: Send {
     fn finalize(&self, _pool: &mut ObjectPool) {}
 
     // before allocating on the object pool...

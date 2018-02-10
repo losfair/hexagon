@@ -5,7 +5,7 @@ use executor::ExecutorImpl;
 use value::{Value, ValueContext};
 use errors::{VMError, FieldNotFoundError};
 
-pub trait TypedArrayElement: Copy + 'static {
+pub trait TypedArrayElement: Send + Copy + 'static {
     fn must_from_value(other: Value) -> Self {
         Self::from_value(other).unwrap_or_else(|| panic!(VMError::from("Invalid cast")))
     }
