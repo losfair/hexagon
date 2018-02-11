@@ -1,8 +1,5 @@
 use std::cell::Cell;
-use std::cell::UnsafeCell;
-use std::cell::RefCell;
 use std::collections::HashSet;
-use std::ops::{Deref, DerefMut};
 use smallvec::SmallVec;
 use errors;
 use value::Value;

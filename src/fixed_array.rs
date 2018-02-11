@@ -3,27 +3,27 @@ macro_rules! fixed_array {
     ($name:ident, $len:expr) => {
 
 pub struct $name<T: Copy> {
-    data: [Cell<T>; $len],
-    data_len: Cell<usize>
+    data: [::std::cell::Cell<T>; $len],
+    data_len: ::std::cell::Cell<usize>
 }
 
 impl<T: Copy> $name<T> {
     pub fn new(default_value: T) -> $name<T> {
-        let mut arr: [Cell<T>; $len] = unsafe { ::std::mem::uninitialized() };
+        let mut arr: [::std::cell::Cell<T>; $len] = unsafe { ::std::mem::uninitialized() };
         for i in 0..$len {
-            unsafe { ::std::ptr::write(&mut arr[i], Cell::new(default_value)); }
+            unsafe { ::std::ptr::write(&mut arr[i], ::std::cell::Cell::new(default_value)); }
         }
 
         $name {
             data: arr,
-            data_len: Cell::new(0)
+            data_len: ::std::cell::Cell::new(0)
         }
     }
 
     pub fn push(&self, v: T) {
         let len = self.len();
         if len >= self.data.len() {
-            panic!(errors::VMError::from("FixedArray overflow"));
+            panic!(::errors::VMError::from("FixedArray overflow"));
         }
         self.data[len].set(v);
         self.data_len.set(len + 1);
@@ -32,7 +32,7 @@ impl<T: Copy> $name<T> {
     pub fn pop(&self) -> T {
         let len = self.len();
         if len <= 0 {
-            panic!(errors::VMError::from("FixedArray underflow"));
+            panic!(::errors::VMError::from("FixedArray underflow"));
         }
         let v = self.data[len - 1].get();
         self.data_len.set(len - 1);
@@ -42,7 +42,7 @@ impl<T: Copy> $name<T> {
     pub fn top(&self) -> T {
         let len = self.len();
         if len <= 0 {
-            panic!(errors::VMError::from("FixedArray underflow"));
+            panic!(::errors::VMError::from("FixedArray underflow"));
         }
         self.data[len - 1].get()
     }
