@@ -9,101 +9,35 @@ use value::Value;
 use opcode::StackMapPattern;
 use object_pool::ObjectPool;
 
-thread_local! {
-    static FRAME_POOL: RefCell<FramePool> = RefCell::new(FramePool::new(128));
-}
-
-struct FramePool {
-    frames: Vec<Option<Box<Frame>>>,
-    available: Vec<usize>,
-    in_use: Vec<usize>
-}
-
-impl FramePool {
-    fn new(n: usize) -> FramePool {
-        FramePool {
-            frames: (0..n).map(|_| Some(Box::new(Frame::new()))).collect(),
-            available: (0..n).collect(),
-            in_use: Vec::new()
-        }
-    }
-
-    fn add(&mut self, mut frame: Box<Frame>) {
-        frame.reset();
-
-        if self.in_use.is_empty() {
-            self.frames.push(Some(frame));
-            self.available.push(self.frames.len() - 1);
-        } else {
-            let id = self.in_use.pop().unwrap();
-            self.frames[id] = Some(frame);
-            self.available.push(id);
-        }
-    }
-
-    fn get(&mut self) -> Box<Frame> {
-        if self.available.is_empty() {
-            Box::new(Frame::new())
-        } else {
-            let id = self.available.pop().unwrap();
-            let frame = ::std::mem::replace(&mut self.frames[id], None).unwrap();
-            self.in_use.push(id);
-            frame
-        }
-    }
-}
+fixed_array!(FixedArray32, 32);
 
 pub struct CallStack {
-    frames: Vec<FrameHandle>,
+    frames: Vec<Frame>,
+    n_frames: usize,
     limit: Option<usize>
 }
 
-pub struct FrameHandle {
-    frame: Option<Box<Frame>>
-}
-
-impl Deref for FrameHandle {
-    type Target = Frame;
-    fn deref(&self) -> &Frame {
-        self.frame.as_ref().unwrap()
-    }
-}
-
-impl DerefMut for FrameHandle {
-    fn deref_mut(&mut self) -> &mut Frame {
-        self.frame.as_mut().unwrap()
-    }
-}
-
-impl Drop for FrameHandle {
-    fn drop(&mut self) {
-        let frame = ::std::mem::replace(&mut self.frame, None).unwrap();
-        FRAME_POOL.with(|pool| pool.borrow_mut().add(frame));
-    }
-}
-
-impl FrameHandle {
-    pub fn new() -> FrameHandle {
-        FrameHandle {
-            frame: Some(FRAME_POOL.with(|pool| pool.borrow_mut().get()))
-        }
-    }
-}
-
+pub type FrameHandle = Frame;
 
 // [unsafe]
 // These fields are guaranteed to be accessed properly (as an implementation detail).
 pub struct Frame {
     this: Cell<Value>,
-    arguments: UnsafeCell<SmallVec<[Value; 4]>>,
-    locals: UnsafeCell<SmallVec<[Value; 8]>>,
-    pub(crate) exec_stack: UnsafeCell<SmallVec<[Value; 8]>>
+    arguments: FixedArray32<Value>,
+    locals: FixedArray32<Value>,
+    pub(crate) exec_stack: FixedArray32<Value>
 }
 
 impl CallStack {
-    pub fn new() -> CallStack {
+    pub fn new(len: usize) -> CallStack {
+        let mut frames = Vec::with_capacity(len);
+        for _ in 0..len {
+            frames.push(Frame::new());
+        }
+
         CallStack {
-            frames: vec! [ FrameHandle::new() ],
+            frames: frames,
+            n_frames: 1, // one 'initial' frame
             limit: None
         }
     }
@@ -112,41 +46,50 @@ impl CallStack {
         self.limit = Some(limit);
     }
 
-    pub fn push(&mut self, frame: FrameHandle) {
-        if let Some(limit) = self.limit {
-            if self.frames.len() >= limit {
-                panic!(errors::VMError::from(errors::RuntimeError::new("Virtual stack overflow")));
-            }
+    pub fn push(&mut self) {
+        if self.n_frames >= self.frames.len() {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Virtual stack overflow")));
         }
-        self.frames.push(frame);
+        self.n_frames += 1;
     }
 
-    pub fn pop(&mut self) -> FrameHandle {
-        self.frames.pop().unwrap()
+    pub fn pop(&mut self) {
+        if self.n_frames <= 0 {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Virtual stack underflow")));
+        }
+        self.frames[self.n_frames - 1].reset();
+        self.n_frames -= 1;
     }
 
-    pub fn top(&self) -> &FrameHandle {
-        &self.frames[self.frames.len() - 1]
+    pub fn top(&self) -> &Frame {
+        if self.n_frames <= 0 {
+            panic!(errors::VMError::from(errors::RuntimeError::new("Virtual stack underflow")));
+        }
+        &self.frames[self.n_frames - 1]
     }
 
     pub fn collect_objects(&self) -> Vec<usize> {
         let mut objs = HashSet::new();
-        for frame in &self.frames {
+        for i in 0..self.n_frames {
+            let frame = &self.frames[i];
             if let Value::Object(id) = frame.this.get() {
                 objs.insert(id);
             }
-            for v in unsafe { &*frame.arguments.get() }.iter() {
-                if let Value::Object(id) = *v {
+            for i in 0..frame.arguments.len() {
+                let v = frame.arguments.get(i).unwrap();
+                if let Value::Object(id) = v {
                     objs.insert(id);
                 }
             }
-            for v in unsafe { &*frame.locals.get() }.iter() {
-                if let Value::Object(id) = *v {
+            for i in 0..frame.locals.len() {
+                let v = frame.locals.get(i).unwrap();
+                if let Value::Object(id) = v {
                     objs.insert(id);
                 }
             }
-            for v in unsafe { &*frame.exec_stack.get() }.iter() {
-                if let Value::Object(id) = *v {
+            for i in 0..frame.exec_stack.len() {
+                let v = frame.exec_stack.get(i).unwrap();
+                if let Value::Object(id) = v {
                     objs.insert(id);
                 }
             }
@@ -156,58 +99,45 @@ impl CallStack {
 }
 
 impl Frame {
-    fn new() -> Frame {
+    pub fn new() -> Frame {
         Frame {
             this: Cell::new(Value::Null),
-            arguments: UnsafeCell::new(SmallVec::new()),
-            locals: UnsafeCell::new(SmallVec::new()),
-            exec_stack: UnsafeCell::new(SmallVec::new())
-        }
-    }
-    fn reset(&mut self) {
-        self.this.set(Value::Null);
-        unsafe {
-            (&mut *self.arguments.get()).clear();
-            (&mut *self.locals.get()).clear();
-            (&mut *self.exec_stack.get()).clear();
+            arguments: FixedArray32::new(Value::Null),
+            locals: FixedArray32::new(Value::Null),
+            exec_stack: FixedArray32::new(Value::Null)
         }
     }
 
-    pub fn init_with_arguments(&mut self, this: Value, args: &[Value]) {
+    fn reset(&self) {
+        self.this.set(Value::Null);
+        self.arguments.clear();
+        self.locals.clear();
+        self.exec_stack.clear();
+    }
+
+    pub fn init_with_arguments(&self, this: Value, args: &[Value]) {
         self.this.set(this);
-        let arguments = unsafe { &mut *self.arguments.get() };
         for arg in args {
-            arguments.push(*arg);
+            self.arguments.push(*arg);
         }
     }
 
     #[inline]
     pub fn push_exec(&self, obj: Value) {
-        unsafe { &mut *self.exec_stack.get() }.push(obj);
+        self.exec_stack.push(obj);
     }
 
     #[inline]
     pub fn pop_exec(&self) -> Value {
-        match unsafe { &mut *self.exec_stack.get() }.pop() {
-            Some(v) => v,
-            None => panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")))
-        }
+        self.exec_stack.pop()
     }
 
     #[inline]
     pub fn dup_exec(&self) {
-        let stack = unsafe { &mut *self.exec_stack.get() };
-        if stack.is_empty() {
-            panic!(errors::VMError::from(errors::RuntimeError::new("Execution stack corrupted")));
-        }
-
-        let last = stack[stack.len() - 1].clone();
-        stack.push(last);
+        self.exec_stack.push(self.exec_stack.top());
     }
 
     pub fn map_exec(&self, p: &StackMapPattern, pool: &mut ObjectPool) {
-        let stack = unsafe { &mut *self.exec_stack.get() };
-
         let mut new_values: SmallVec<[Value; 4]> = SmallVec::with_capacity(p.map.len());
         for loc in &p.map {
             new_values.push(loc.extract(self, pool));
@@ -215,65 +145,47 @@ impl Frame {
 
         if p.end_state < 0 {
             for _ in 0..(-p.end_state) {
-                stack.pop().unwrap();
+                self.exec_stack.pop();
             }
         } else {
             for _ in 0..p.end_state {
-                stack.push(Value::Null);
+                self.exec_stack.push(Value::Null);
             }
         }
 
         for i in 0..new_values.len() {
-            let sv_id = stack.len() - 1 - i;
+            let sv_id = self.exec_stack.len() - 1 - i;
             let nv_id = new_values.len() - 1 - i;
-            stack[sv_id] = new_values[nv_id];
+            self.exec_stack.set(sv_id, new_values[nv_id]);
         }
     }
 
     pub fn bulk_load(&self, values: &[Value]) {
-        let stack = unsafe { &mut *self.exec_stack.get() };
-        stack.reserve(values.len());
         for v in values {
-            stack.push(*v);
+            self.exec_stack.push(*v);
         }
     }
 
     pub fn reset_locals(&self, n_slots: usize) {
-        let locals = unsafe { &mut *self.locals.get() };
-        locals.clear();
+        self.locals.clear();
         for _ in 0..n_slots {
-            locals.push(Value::Null);
+            self.locals.push(Value::Null);
         }
     }
 
     #[inline]
     pub fn get_local(&self, ind: usize) -> Value {
-        let locals = unsafe { &*self.locals.get() };
-        if ind >= locals.len() {
-            panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
-        }
-
-        (*locals)[ind]
+        self.locals.get(ind).unwrap()
     }
 
     #[inline]
     pub fn set_local(&self, ind: usize, obj: Value) {
-        let locals = unsafe { &mut *self.locals.get() };
-        if ind >= locals.len() {
-            panic!(errors::VMError::from(errors::RuntimeError::new("Index out of bound")));
-        }
-
-        (*locals)[ind] = obj;
+        self.locals.set(ind, obj);
     }
 
     #[inline]
     pub fn get_argument(&self, id: usize) -> Option<Value> {
-        let args = unsafe { &*self.arguments.get() };
-        if id < args.len() {
-            Some(args[id])
-        } else {
-            None
-        }
+        self.arguments.get(id)
     }
 
     #[inline]
@@ -285,7 +197,7 @@ impl Frame {
 
     #[inline]
     pub fn get_n_arguments(&self) -> usize {
-        unsafe { &*self.arguments.get() }.len()
+        self.arguments.len()
     }
 
     #[inline]

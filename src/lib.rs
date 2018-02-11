@@ -13,8 +13,12 @@ extern crate bincode;
 #[macro_use]
 pub mod debug;
 
+#[macro_use]
+pub mod fixed_array;
+
 pub mod hybrid;
 pub mod builtin;
+pub mod jit;
 
 pub mod basic_block;
 pub mod call_stack;

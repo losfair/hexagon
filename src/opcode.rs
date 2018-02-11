@@ -168,12 +168,10 @@ impl ValueLocation {
     }
 
     pub fn extract(&self, frame: &Frame, pool: &mut ObjectPool) -> Value {
-        let stack = unsafe { &mut *frame.exec_stack.get() };
-
         match *self {
             ValueLocation::Stack(dt) => {
-                let center = stack.len() - 1;
-                stack[(center as isize + dt) as usize]
+                let center = frame.exec_stack.len() - 1;
+                frame.exec_stack.get((center as isize + dt) as usize).unwrap()
             },
             ValueLocation::Local(id) => frame.get_local(id),
             ValueLocation::Argument(id) => frame.must_get_argument(id),

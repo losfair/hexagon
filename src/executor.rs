@@ -58,7 +58,7 @@ macro_rules! eval_select_opcode_sequence {
 impl ExecutorImpl {
     pub fn new() -> ExecutorImpl {
         let mut ret = ExecutorImpl {
-            stack: CallStack::new(),
+            stack: CallStack::new(2048),
             hybrid_executor: HybridExecutor::new(),
             object_pool: ObjectPool::new()
         };
@@ -94,12 +94,6 @@ impl ExecutorImpl {
     }
 
     pub fn invoke(&mut self, callable_val: Value, this: Value, field_name: Option<&str>, args: &[Value]) {
-        let mut frame = FrameHandle::new();
-        frame.init_with_arguments(match this {
-            Value::Null => self.get_current_frame().get_this(),
-            _ => this
-        }, args);
-
         // Push the callable object onto the execution stack
         // to prevent it from begin GC-ed.
         //
@@ -113,17 +107,24 @@ impl ExecutorImpl {
             ))
         };
 
-        self.get_current_frame().push_exec(callable_val);
-
         let callable_obj = self.object_pool.get(callable_obj_id);
 
-        self.stack.push(frame);
-        let ret = catch_unwind(AssertUnwindSafe(|| match field_name {
-            Some(v) => callable_obj.call_field(v, self),
-            None => callable_obj.call(self)
-        }));
-        self.stack.pop();
+        self.get_current_frame().push_exec(callable_val);
+        self.stack.push();
 
+        let ret = catch_unwind(AssertUnwindSafe(|| {
+            let frame = self.stack.top();
+            frame.init_with_arguments(match this {
+                Value::Null => self.get_current_frame().get_this(),
+                _ => this
+            }, args);
+            match field_name {
+                Some(v) => callable_obj.call_field(v, self),
+                None => callable_obj.call(self)
+            }
+        }));
+
+        self.stack.pop();
         self.get_current_frame().pop_exec();
 
         match ret {
@@ -1082,14 +1083,15 @@ impl ExecutorImpl {
 
         let new_this = Value::Null;
 
-        let mut frame = FrameHandle::new();
-        frame.init_with_arguments(
-            new_this,
-            &[]
-        );
-
-        self.stack.push(frame);
-        let ret = catch_unwind(AssertUnwindSafe(|| self.invoke(callable_obj_id, new_this, None, &[])));
+        self.stack.push();
+        let ret = catch_unwind(AssertUnwindSafe(|| {
+            let frame = self.stack.top();
+            frame.init_with_arguments(
+                new_this,
+                &[]
+            );
+            self.invoke(callable_obj_id, new_this, None, &[])
+        }));
         self.stack.pop();
 
         match ret {
