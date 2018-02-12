@@ -36,6 +36,7 @@ impl Executor {
 pub struct ExecutorImpl {
     stack: CallStack,
     hybrid_executor: HybridExecutor,
+    pub log_execution: bool,
 
     object_pool: ObjectPool
 }
@@ -60,6 +61,7 @@ impl ExecutorImpl {
         let mut ret = ExecutorImpl {
             stack: CallStack::new(2048),
             hybrid_executor: HybridExecutor::new(),
+            log_execution: false,
             object_pool: ObjectPool::new()
         };
         ret.create_static_object("__builtin", Box::new(BuiltinObject::new()));
@@ -758,6 +760,10 @@ impl ExecutorImpl {
     }
 
     fn _eval_opcode(&mut self, op: &OpCode) -> Option<EvalControlMessage> {
+        if self.log_execution {
+            println!("[_eval_opcode] {:?}", op);
+        }
+
         match *op {
             OpCode::Nop => {},
             OpCode::LoadNull => {
