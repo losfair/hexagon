@@ -260,7 +260,7 @@ impl BasicBlock {
 
         let mut begin: usize = 0;
         while begin < (end_state - lower_bound + 1) as usize {
-            if stack_map[begin] != ValueLocation::Stack(lower_bound) {
+            if stack_map[begin] != ValueLocation::Stack(begin as isize + lower_bound) {
                 break;
             }
             begin += 1;
