@@ -47,6 +47,11 @@ impl CallStack {
         if self.n_frames >= self.frames.len() {
             panic!(errors::VMError::from(errors::RuntimeError::new("Virtual stack overflow")));
         }
+        if let Some(limit) = self.limit {
+            if self.n_frames >= limit {
+                panic!(errors::VMError::from(errors::RuntimeError::new("Maximum stack depth exceeded")));
+            }
+        }
         self.n_frames += 1;
     }
 
